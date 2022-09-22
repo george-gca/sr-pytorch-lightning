@@ -1,0 +1,138 @@
+from argparse import ArgumentParser, Namespace
+
+import torch.nn as nn
+
+from .common import DefaultConv2d, MeanShift, UpscaleBlock
+from .srmodel import SRModel
+
+
+## Channel Attention (CA) Layer
+class CALayer(nn.Module):
+    def __init__(self, channel, reduction=16):
+        super(CALayer, self).__init__()
+        # global average pooling: feature --> point
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        # feature channel downscale and upscale --> channel weight
+        self.conv_du = nn.Sequential(
+            nn.Conv2d(channel, channel // reduction, 1, padding=0, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel // reduction, channel, 1, padding=0, bias=True),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        # x = torch.Size([-1, 64, 32, 32])
+        y = self.avg_pool(x)
+        # # y = torch.Size([-1, 64, 1, 1])
+        y = self.conv_du(y)
+        # # y = torch.Size([-1, 64, 1, 1])
+        return x * y
+
+
+## Residual Channel Attention Block (RCAB)
+class RCAB(nn.Module):
+    def __init__(
+            self, conv, n_feat, kernel_size, reduction,
+            bias=True, bn=False, act=nn.ReLU(True), res_scale=1):
+
+        super(RCAB, self).__init__()
+        modules_body = []
+        for i in range(2):
+            modules_body.append(conv(
+                in_channels=n_feat, out_channels=n_feat, kernel_size=kernel_size, bias=bias))
+            if bn:
+                modules_body.append(nn.BatchNorm2d(n_feat))
+            if i == 0:
+                modules_body.append(act)
+        modules_body.append(CALayer(n_feat, reduction))
+        self.body = nn.Sequential(*modules_body)
+        self.res_scale = res_scale
+
+    def forward(self, x):
+        res = self.body(x)
+        #res = self.body(x).mul(self.res_scale)
+        res += x
+        return res
+
+
+## Residual Group (RG)
+class ResidualGroup(nn.Module):
+    def __init__(self, conv, n_feat, kernel_size, reduction, act, res_scale, n_resblocks):
+        super(ResidualGroup, self).__init__()
+        modules_body = []
+        modules_body = [
+            RCAB(
+                conv, n_feat, kernel_size, reduction, bias=True, bn=False, act=nn.ReLU(True), res_scale=1)
+            for _ in range(n_resblocks)]
+        modules_body.append(
+            conv(in_channels=n_feat, out_channels=n_feat, kernel_size=kernel_size))
+        self.body = nn.Sequential(*modules_body)
+
+    def forward(self, x):
+        res = self.body(x)
+        res += x
+        return res
+
+
+## Residual Channel Attention Network (RCAN)
+class RCAN(SRModel):
+    """
+    LightningModule for RCAN, https://openaccess.thecvf.com/content_ECCV_2018/papers/Yulun_Zhang_Image_Super-Resolution_Using_ECCV_2018_paper.pdf.
+    """
+    @staticmethod
+    def add_model_specific_args(parent: ArgumentParser) -> ArgumentParser:
+        parent = SRModel.add_model_specific_args(parent)
+        parser = ArgumentParser(parents=[parent], add_help=False)
+        parser.add_argument('--n_feats', type=int, default=64,
+                            help='number of feature maps')
+        parser.add_argument('--n_resblocks', type=int, default=16,
+                            help='number of residual blocks')
+        parser.add_argument('--n_resgroups', type=int, default=10,
+                            help='number of residual groups')
+        parser.add_argument('--reduction', type=int, default=16,
+                            help='number of feature maps reduction')
+        parser.add_argument('--res_scale', type=float, default=1,
+                            help='residual scaling')
+        return parser
+
+    def __init__(self, args: Namespace):
+        super(RCAN, self).__init__(args)
+        kernel_size = 3
+
+        # RGB mean for DIV2K
+        self.sub_mean = MeanShift()
+
+        # define head module
+        modules_head = [DefaultConv2d(in_channels=3,
+                             out_channels=args.n_feats, kernel_size=kernel_size)]
+
+        # define body module
+        modules_body = [
+            ResidualGroup(
+                DefaultConv2d, args.n_feats, kernel_size, args.reduction, act=nn.ReLU(True), res_scale=args.res_scale, n_resblocks=args.n_resblocks)
+            for _ in range(args.n_resgroups)]
+
+        modules_body.append(
+            DefaultConv2d(in_channels=args.n_feats, out_channels=args.n_feats, kernel_size=kernel_size))
+
+        # define tail module
+        modules_tail = [
+            UpscaleBlock(self._scale_factor, args.n_feats),
+            DefaultConv2d(in_channels=args.n_feats, out_channels=3, kernel_size=kernel_size)]
+
+        self.head = nn.Sequential(*modules_head)
+        self.body = nn.Sequential(*modules_body)
+        self.tail = nn.Sequential(*modules_tail)
+        self.add_mean = MeanShift(sign=1)
+
+    def forward(self, x):
+        x = self.sub_mean(x)
+        x = self.head(x)
+
+        res = self.body(x)
+        res += x
+
+        x = self.tail(res)
+        x = self.add_mean(x)
+
+        return x
