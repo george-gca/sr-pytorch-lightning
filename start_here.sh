@@ -16,8 +16,8 @@ datasets_dir="/datasets"
 train_dataset="DIV2K"
 # eval_datasets="DIV2K Set5 Set14 B100 Urban100"
 eval_datasets="Set5 Set14"
-epochs=6
-losses="adaptive + 0.4 * lpips + 0.3 * edge_loss + 0.3 * pencil_sketch"
+epochs=2000
+losses="adaptive + lpips"
 metrics="BRISQUE FLIP LPIPS MS-SSIM PSNR SSIM"
 optimizer="ADAM"
 gpu_to_use=0
@@ -27,8 +27,8 @@ scale=4
 patch_size=128
 
 # log params
-log_loss_every_n_epochs=2
-check_val_every_n_epoch=3
+log_loss_every_n_epochs=50
+check_val_every_n_epoch=100
 send_telegram_msg=1
 
 # endregion
