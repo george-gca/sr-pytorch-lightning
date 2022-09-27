@@ -36,36 +36,39 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
     apt-get update && \
 
     DEBIAN_FRONTEND=noninteractive $APT_INSTALL \
-        bc \
-        curl \
-        git \
-        libffi-dev \
-        rsync \
-        wget && \
+        bc=1.07.1-2 \
+        curl=7.58.0-2ubuntu3.18 \
+        git=1:2.17.1-1ubuntu0.11 \
+        libffi-dev=3.2.1-8 \
+        rsync=3.1.2-2.1ubuntu1.4 \
+        wget=1.19.4-1ubuntu2.2 && \
 
 # ==================================================================
 # install python libraries via pip
 # ------------------------------------------------------------------
 
     $PIP_INSTALL \
-        pip \
-        setuptools \
-        wheel && \
+        pip==22.0.4 \
+        setuptools==62.2.0 \
+        wheel==0.37.1 && \
     $PIP_INSTALL \
-        comet-ml \
-        datasets \
-        ipdb \
-        ipython \
-        kornia \
-        matplotlib \
-        numpy \
-        pillow \
-        piq \
-        prettytable \
-        pytorch-lightning \
-        tensorboard \
-        torch_optimizer \
-        tqdm && \
+        comet-ml==3.31.0  \
+        datasets==2.3.2 \
+        ipdb==0.13.9 \
+        ipython==8.3.0 \
+        kornia==0.6.4 \
+        matplotlib==3.5.2 \
+        numpy==1.22.3 \
+        Pillow==9.1.0 \
+        piq==0.7.0 \
+        prettytable==3.3.0 \
+        # specify protobuf to avoid bug with tensorboard
+        # https://developers.google.com/protocol-buffers/docs/news/2022-05-06#python-updates
+        protobuf==3.20 \
+        pytorch-lightning==1.6.3 \
+        tensorboard==2.9.0 \
+        torch_optimizer==0.3.0 \
+        tqdm==4.64.0 && \
 
 # ==================================================================
 # install python libraries via git
@@ -78,7 +81,7 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
 # ------------------------------------------------------------------
 
     $PIP_INSTALL \
-        telegram-send && \
+        telegram-send==0.33.1 && \
 
 # ==================================================================
 # config & cleanup
