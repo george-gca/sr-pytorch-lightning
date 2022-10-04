@@ -74,7 +74,7 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
 # install python libraries via git
 # ------------------------------------------------------------------
 
-    $PIP_INSTALL git+https://github.com/jonbarron/robust_loss_pytorch && \
+    $PIP_INSTALL git+https://github.com/jonbarron/robust_loss_pytorch@9831f1db8 && \
 
 # ==================================================================
 # send telegram message
