@@ -28,7 +28,7 @@ patch_size=128
 
 # log params
 log_loss_every_n_epochs=50
-check_val_every_n_epoch=100
+check_val_every_n_epoch=200
 send_telegram_msg=1
 
 # endregion
@@ -75,8 +75,7 @@ for model in "${models[@]}"; do
       --save_results -1 \
       --save_results_from_epoch last \
       --scale_factor $scale \
-      --train_datasets $train_dataset \
-      --weights_summary full
+      --train_datasets $train_dataset
 
   LogElapsedTime $(( $SECONDS - $previous_time )) "$model"_$save_dir $send_telegram_msg
 done
