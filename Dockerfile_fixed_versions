@@ -37,11 +37,11 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
 
     DEBIAN_FRONTEND=noninteractive $APT_INSTALL \
         bc=1.07.1-2 \
-        curl=7.58.0-2ubuntu3.18 \
-        git=1:2.17.1-1ubuntu0.11 \
+        curl \
+        git \
         libffi-dev=3.2.1-8 \
-        rsync=3.1.2-2.1ubuntu1.4 \
-        wget=1.19.4-1ubuntu2.2 && \
+        rsync \
+        wget && \
 
 # ==================================================================
 # install python libraries via pip
