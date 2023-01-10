@@ -58,13 +58,15 @@ for model in "${models[@]}"; do
   previous_time=$SECONDS
 
   python train.py \
+      --accelerator gpu \
       --check_val_every_n_epoch $check_val_every_n_epoch \
       --datasets_dir $datasets_dir \
       --default_root_dir "experiments/$model"_$save_dir \
+      --devices -1 \
       --eval_datasets $eval_datasets \
-      --gpus -1 \
       --log_level info \
       --log_loss_every_n_epochs $log_loss_every_n_epochs \
+      --loggers tensorboard \
       --losses "$losses" \
       --max_epochs $epochs \
       --metrics $metrics \
