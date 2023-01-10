@@ -81,6 +81,8 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
 # ------------------------------------------------------------------
 
     $PIP_INSTALL \
+        # https://github.com/rahiel/telegram-send/issues/115#issuecomment-1368728425
+        python-telegram-bot==13.5 \
         telegram-send==0.33.1 && \
 
 # ==================================================================
