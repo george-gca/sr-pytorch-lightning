@@ -8,14 +8,14 @@ import numpy as np
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.callbacks.progress import ProgressBar
+from pytorch_lightning.callbacks import TQDMProgressBar
 from pytorch_lightning.loggers import CometLogger, TensorBoardLogger
 
 import models
 from srdata import SRData
 
 
-class ItemsProgressBar(ProgressBar):
+class ItemsProgressBar(TQDMProgressBar):
     r"""
     This is the same default progress bar used by Lightning, but printing
     items instead of batches during training. It prints to `stdout` using the
@@ -80,11 +80,6 @@ class ItemsProgressBar(ProgressBar):
         training dataloader is of infinite size.
         """
         return self.trainer.num_training_batches * self.batch_size
-
-    def on_epoch_start(self, trainer, pl_module):
-        # https://github.com/PyTorchLightning/pytorch-lightning/issues/2189
-        # print('\n')
-        super().on_epoch_start(trainer, pl_module)
 
 
 def setup_log(args: argparse.Namespace, logs_to_silence: List[str] = []) -> logging.Logger:
