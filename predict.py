@@ -173,6 +173,7 @@ if __name__ == '__main__':
     parser = SRData.add_dataset_specific_args(parser)
 
     # add general options to argparse
+    parser.add_argument('--checkpoint', type=str, required=True)
     parser.add_argument('--comet_project', type=str, default='sr-pytorch-lightning')
     parser.add_argument('--log_graph', action='store_true',
                         help='log model graph to tensorboard')
