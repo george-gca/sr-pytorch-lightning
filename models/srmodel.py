@@ -131,6 +131,7 @@ class SRModel(pl.LightningModule, ABC):
 
         self._default_root_dir = args.default_root_dir
         self._eval_datasets = args.eval_datasets
+        self._predict_datasets = args.predict_datasets
         self._last_epoch = args.max_epochs
         self._log_loss_every_n_epochs = args.log_loss_every_n_epochs
         self._log_weights_every_n_epochs = args.log_weights_every_n_epochs
@@ -209,7 +210,7 @@ class SRModel(pl.LightningModule, ABC):
                                                                step=self.current_epoch + 1)
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
-        # validation step when using multiple validation dataset
+        # validation step when using multiple validation datasets
         # at each validation step only one image is processed
         img_lr = batch['lr']
         img_hr = batch['hr']
@@ -368,6 +369,66 @@ class SRModel(pl.LightningModule, ABC):
                 # dict is the result of a batch run
                 for dataset_result in outputs:
                     _log_metrics(dataset_result[0].keys(), dataset_result)
+
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        # prediction step when using multiple prediction datasets
+        # at each prediction step only one image is processed
+        img_lr = batch['lr']
+        img_sr = self.forward(img_lr)
+        img_sr = img_sr.clamp(0, 1)
+
+        if self._center_crop is None:
+            self._center_crop = K.CenterCrop(96)
+
+        imgs_to_save = []
+        imgs_suffixes = []
+        imgs_to_save.append(img_sr)
+        imgs_suffixes.append('')
+
+        try:
+            img_sr_crop = self._center_crop(img_sr)
+            imgs_to_save.append(img_sr_crop)
+            imgs_suffixes.append('_center')
+        except RuntimeError:
+            # catch RuntimeError that may happen with center_crop
+            self._logger.exception('Runtime Error')
+            img_sr_crop = None
+
+        # save images from each predict dataset to be visualized in logger
+        # e.g.: DIV2K/0001
+        image_path = f'{self._predict_datasets[dataloader_idx]}/{batch["path"][0]}'
+        self._logger.debug(f'Saving {image_path}')
+
+        # save images on disk
+        for img_to_save, suffix in zip(imgs_to_save, imgs_suffixes):
+            image_local_path = Path(f'{self._default_root_dir}') / self._predict_datasets[dataloader_idx]
+            image_local_path.mkdir(parents=True, exist_ok=True)
+            self._logger.debug(f'Saving local file: {image_local_path}/{batch["path"][0]}{suffix}.png')
+            torchvision.utils.save_image(
+                img_to_save.view(*img_to_save.size()[1:]).cpu().detach(),
+                image_local_path / f'{batch["path"][0]}{suffix}.png'
+            )
+
+        # save images on loggers
+        for logger in self.loggers:
+            if isinstance(logger, TensorBoardLogger):
+                for img_to_save, suffix in zip(imgs_to_save, imgs_suffixes):
+                    logger.experiment.add_image(
+                        f'{image_path}{suffix}', img_to_save.view(*img_to_save.size()[1:]), self.global_step)
+
+            elif isinstance(logger, CometLogger):
+                for img_to_save, suffix in zip(imgs_to_save, imgs_suffixes):
+                    if img_to_save.size()[1] > 1:
+                        # comet logger currently don't support greyscale images
+                        logger.experiment.log_image(
+                            img_to_save.view(
+                                *img_to_save.size()[1:]).cpu().detach(),
+                            name=f'{image_path}{suffix}',
+                            image_channels='first',
+                            step=self.global_step
+                        )
+
+        return img_sr
 
     def _create_losses(self, args: Namespace) -> List[_SubLoss]:
         # support for composite losses, like
