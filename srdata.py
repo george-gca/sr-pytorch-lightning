@@ -293,7 +293,7 @@ class SRData(LightningDataModule):
                                      'Set14', 'B100', 'Urban100'])
         parser.add_argument('--train_datasets', type=str, nargs='+',
                             default=['DIV2K'])
-        parser.add_argument('--predict_datasets', type=str, nargs='+',
+        parser.add_argument('--predict_datasets', type=str, nargs='*',
                             default=[])
         return parser
 
@@ -322,7 +322,8 @@ class SRData(LightningDataModule):
             else:
                 # check only if HR images exists, since LR images can be generated from them
                 if not (self._datasets_dir / dataset / 'HR').exists():
-                    raise FileNotFoundError(f'Could not find HR images for dataset {dataset} in {self._datasets_dir / dataset / "HR"}.')
+                    raise FileNotFoundError(f'Could not find HR images for training dataset {dataset}'
+                                            f' in {self._datasets_dir / dataset / "HR"}.')
 
         for i in range(len(self._eval_datasets_names)):
             dataset = self._eval_datasets_names[i]
@@ -335,11 +336,17 @@ class SRData(LightningDataModule):
             else:
                 # check only if HR images exists, since LR images can be generated from them
                 if not (self._datasets_dir / dataset / 'HR').exists():
-                    raise FileNotFoundError(f'Could not find HR images for dataset {dataset} in {self._datasets_dir / dataset / "HR"}.')
+                    raise FileNotFoundError(f'Could not find HR images for evaluation dataset {dataset}'
+                                            f' in {self._datasets_dir / dataset / "HR"}.')
                 continue
 
             self._eval_datasets_names[i] = dataset_name
             load_dataset(dataset_name, f'bicubic_x{self._scale_factor}', split='validation')
+
+        for dataset in self._predict_datasets_names:
+            if not (self._datasets_dir / dataset).exists():
+                raise FileNotFoundError(f'Could not find images for predicting dataset {dataset}'
+                                        f' in {self._datasets_dir / dataset}.')
 
 
     def setup(self, stage: Optional[str] = None):
@@ -375,7 +382,7 @@ class SRData(LightningDataModule):
 
             self._train_datasets = ConcatDataset(datasets)
 
-        if stage in ('fit', 'validate'):
+        if stage in (None, 'fit', 'validate'):
             datasets = []
             for dataset in self._eval_datasets_names:
                 if dataset.startswith('eugenesiow/'):
@@ -405,7 +412,16 @@ class SRData(LightningDataModule):
             self._eval_datasets = datasets
 
         # if stage in (None, 'test'):
-        # if stage in (None, 'predict'):
+        if stage in ('predict',):
+            datasets = []
+            datasets.append(_SRDatasetFromDirectory(
+                lr_data_dir=self._datasets_dir / dataset,
+                scale_factor=self._scale_factor,
+                patch_size=self._patch_size,
+                augment=self._augment
+            ))
+
+            self._predict_datasets = datasets
 
     def train_dataloader(self):
         return DataLoader(self._train_datasets, self._batch_size, shuffle=True,
@@ -414,7 +430,13 @@ class SRData(LightningDataModule):
     def val_dataloader(self):
         datasets = []
         for dataset in self._eval_datasets:
-            datasets.append(DataLoader(dataset, batch_size=1,
-                                       num_workers=multiprocessing.cpu_count()//2))
+            datasets.append(DataLoader(dataset, batch_size=1, num_workers=multiprocessing.cpu_count()//2))
+
+        return datasets
+
+    def predict_dataloader(self):
+        datasets = []
+        for dataset in self._predict_datasets:
+            datasets.append(DataLoader(dataset, batch_size=1, num_workers=multiprocessing.cpu_count()//2))
 
         return datasets
