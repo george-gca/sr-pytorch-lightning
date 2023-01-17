@@ -13,23 +13,37 @@ models=(
 
 # training params
 datasets_dir="/datasets"
-train_dataset="DIV2K"
-# eval_datasets="DIV2K Set5 Set14 B100 Urban100"
-eval_datasets="Set5 Set14"
-epochs=2000
+epochs=10
+gpu_to_use=0
 losses="adaptive + lpips"
 metrics="BRISQUE FLIP LPIPS MS-SSIM PSNR SSIM"
 optimizer="ADAM"
-gpu_to_use=0
+
+# if train dataset is DIV2K, it will automatically download from HuggingFace datasets
+# else, it will look for it in $datasets_dir/DATASET_NAME/
+train_dataset="DIV2K"
+
+# if train dataset is one of: DIV2K, Set5, Set14, B100, or Urban100, it will automatically
+# download from HuggingFace datasets
+# else, it will look for it in $datasets_dir/DATASET_NAME/
+# eval_datasets="DIV2K Set5 Set14 B100 Urban100"
+eval_datasets="Set5 Set14"
 
 # model params
 scale=4
 patch_size=128
 
 # log params
-log_loss_every_n_epochs=50
-check_val_every_n_epoch=200
+log_loss_every_n_epochs=2
+check_val_every_n_epoch=5
 send_telegram_msg=1
+
+# enable prediction
+# predict=1
+# paths must be like
+# $datasets_dir/DATASET_1_NAME/*.png
+# $datasets_dir/DATASET_2_NAME/*.png
+# predict_datasets="DATASET_1_NAME DATASET_2_NAME"
 
 # endregion
 
@@ -80,4 +94,19 @@ for model in "${models[@]}"; do
       --train_datasets $train_dataset
 
   LogElapsedTime $(( $SECONDS - $previous_time )) "$model"_$save_dir $send_telegram_msg
+
+  if [ -n "$predict" ] ; then
+    python predict.py \
+        --accelerator gpu \
+        --datasets_dir $datasets_dir \
+        --default_root_dir "experiments/$model"_$save_dir \
+        --devices -1 \
+        --log_level info \
+        --loggers tensorboard \
+        --model $model \
+        --predict_datasets $predict_datasets \
+        --scale_factor $scale
+
+    LogElapsedTime $(( $SECONDS - $previous_time )) "$model"_$save_dir $send_telegram_msg
+  fi
 done
