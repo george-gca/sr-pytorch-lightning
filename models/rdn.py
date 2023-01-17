@@ -1,4 +1,5 @@
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
+from typing import Any, Dict
 
 import torch
 import torch.nn as nn
@@ -54,54 +55,54 @@ class RDN(SRModel):
                             choices=['A', 'B'])
         return parser
 
-    def __init__(self, args: Namespace):
-        super(RDN, self).__init__(args)
+    def __init__(self, rdn_config: str='B', G0: int=64, kernel_size: int=3, **kwargs: Dict[str, Any]):
+        super(RDN, self).__init__(**kwargs)
 
         # number of RDB blocks, conv layers, out channels
         self.D, C, G = {
             'A': (20, 6, 32),
             'B': (16, 8, 64),
-        }[args.rdn_config]
+        }[rdn_config]
 
         # Shallow feature extraction net
         self.SFENet1 = nn.Conv2d(
-            3, args.G0, args.kernel_size, padding=(args.kernel_size-1)//2, stride=1)
-        self.SFENet2 = nn.Conv2d(args.G0, args.G0, args.kernel_size, padding=(
-            args.kernel_size-1)//2, stride=1)
+            3, G0, kernel_size, padding=(kernel_size-1)//2, stride=1)
+        self.SFENet2 = nn.Conv2d(G0, G0, kernel_size, padding=(
+            kernel_size-1)//2, stride=1)
 
         # Redidual dense blocks and dense feature fusion
         self._RDBs = nn.ModuleList()
         for i in range(self.D):
             self._RDBs.append(
-                _RDB(growRate0=args.G0, growRate=G, nConvLayers=C)
+                _RDB(growRate0=G0, growRate=G, nConvLayers=C)
             )
 
         # Global Feature Fusion
         self.GFF = nn.Sequential(*[
-            nn.Conv2d(self.D * args.G0, args.G0, 1, padding=0, stride=1),
-            nn.Conv2d(args.G0, args.G0, args.kernel_size, padding=(
-                args.kernel_size-1)//2, stride=1)
+            nn.Conv2d(self.D * G0, G0, 1, padding=0, stride=1),
+            nn.Conv2d(G0, G0, kernel_size, padding=(
+                kernel_size-1)//2, stride=1)
         ])
 
         # Up-sampling net
         if self._scale_factor == 2 or self._scale_factor == 3:
             self.UPNet = nn.Sequential(*[
-                nn.Conv2d(args.G0, G * self._scale_factor * self._scale_factor, args.kernel_size,
-                          padding=(args.kernel_size-1)//2, stride=1),
+                nn.Conv2d(G0, G * self._scale_factor * self._scale_factor, kernel_size,
+                          padding=(kernel_size-1)//2, stride=1),
                 nn.PixelShuffle(self._scale_factor),
-                nn.Conv2d(G, 3, args.kernel_size,
-                          padding=(args.kernel_size-1)//2, stride=1)
+                nn.Conv2d(G, 3, kernel_size,
+                          padding=(kernel_size-1)//2, stride=1)
             ])
         elif self._scale_factor == 4:
             self.UPNet = nn.Sequential(*[
-                nn.Conv2d(args.G0, G * 4, args.kernel_size,
-                          padding=(args.kernel_size-1)//2, stride=1),
+                nn.Conv2d(G0, G * 4, kernel_size,
+                          padding=(kernel_size-1)//2, stride=1),
                 nn.PixelShuffle(2),
-                nn.Conv2d(G, G * 4, args.kernel_size,
-                          padding=(args.kernel_size-1)//2, stride=1),
+                nn.Conv2d(G, G * 4, kernel_size,
+                          padding=(kernel_size-1)//2, stride=1),
                 nn.PixelShuffle(2),
-                nn.Conv2d(G, 3, args.kernel_size,
-                          padding=(args.kernel_size-1)//2, stride=1)
+                nn.Conv2d(G, 3, kernel_size,
+                          padding=(kernel_size-1)//2, stride=1)
             ])
         else:
             raise ValueError("scale must be 2 or 3 or 4.")

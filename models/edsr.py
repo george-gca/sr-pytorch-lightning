@@ -1,4 +1,5 @@
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
+from typing import Any, Dict
 
 import torch.nn as nn
 
@@ -22,25 +23,25 @@ class EDSR(SRModel):
                             help='residual scaling')
         return parser
 
-    def __init__(self, args: Namespace):
-        super(EDSR, self).__init__(args)
+    def __init__(self, n_feats: int=64, n_resblocks: int=16, res_scale: int=1, **kwargs: Dict[str, Any]):
+        super(EDSR, self).__init__(**kwargs)
         kernel_size = 3
 
         self.sub_mean = MeanShift()
         self.add_mean = MeanShift(sign=1)
 
         m_head = [DefaultConv2d(in_channels=3,
-                                out_channels=args.n_feats, kernel_size=kernel_size)]
+                                out_channels=n_feats, kernel_size=kernel_size)]
 
         m_body = [
-            ResBlock(n_feats=args.n_feats, kernel_size=kernel_size, res_scale=args.res_scale) for _ in range(args.n_resblocks)
+            ResBlock(n_feats=n_feats, kernel_size=kernel_size, res_scale=res_scale) for _ in range(n_resblocks)
         ]
-        m_body.append(DefaultConv2d(in_channels=args.n_feats,
-                                    out_channels=args.n_feats, kernel_size=kernel_size))
+        m_body.append(DefaultConv2d(in_channels=n_feats,
+                                    out_channels=n_feats, kernel_size=kernel_size))
 
         m_tail = [
-            UpscaleBlock(self._scale_factor, args.n_feats),
-            DefaultConv2d(in_channels=args.n_feats, out_channels=3,
+            UpscaleBlock(self._scale_factor, n_feats),
+            DefaultConv2d(in_channels=n_feats, out_channels=3,
                           kernel_size=kernel_size)
         ]
 

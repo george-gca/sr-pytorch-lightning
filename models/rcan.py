@@ -1,4 +1,5 @@
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
+from typing import Any, Dict
 
 import torch.nn as nn
 
@@ -95,8 +96,8 @@ class RCAN(SRModel):
                             help='residual scaling')
         return parser
 
-    def __init__(self, args: Namespace):
-        super(RCAN, self).__init__(args)
+    def __init__(self, n_feats: int=64, n_resblocks: int=16, n_resgroups: int=10, reduction: int=16, res_scale: int=1, **kwargs: Dict[str, Any]):
+        super(RCAN, self).__init__(**kwargs)
         kernel_size = 3
 
         # RGB mean for DIV2K
@@ -104,21 +105,21 @@ class RCAN(SRModel):
 
         # define head module
         modules_head = [DefaultConv2d(in_channels=3,
-                             out_channels=args.n_feats, kernel_size=kernel_size)]
+                             out_channels=n_feats, kernel_size=kernel_size)]
 
         # define body module
         modules_body = [
             ResidualGroup(
-                DefaultConv2d, args.n_feats, kernel_size, args.reduction, act=nn.ReLU(True), res_scale=args.res_scale, n_resblocks=args.n_resblocks)
-            for _ in range(args.n_resgroups)]
+                DefaultConv2d, n_feats, kernel_size, reduction, act=nn.ReLU(True), res_scale=res_scale, n_resblocks=n_resblocks)
+            for _ in range(n_resgroups)]
 
         modules_body.append(
-            DefaultConv2d(in_channels=args.n_feats, out_channels=args.n_feats, kernel_size=kernel_size))
+            DefaultConv2d(in_channels=n_feats, out_channels=n_feats, kernel_size=kernel_size))
 
         # define tail module
         modules_tail = [
-            UpscaleBlock(self._scale_factor, args.n_feats),
-            DefaultConv2d(in_channels=args.n_feats, out_channels=3, kernel_size=kernel_size)]
+            UpscaleBlock(self._scale_factor, n_feats),
+            DefaultConv2d(in_channels=n_feats, out_channels=3, kernel_size=kernel_size)]
 
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)
