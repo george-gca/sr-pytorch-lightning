@@ -147,7 +147,7 @@ def setup_log(args: argparse.Namespace, logs_to_silence: List[str] = []) -> logg
 def main(Model: models.SRModel, args: argparse.Namespace):
     logger = setup_log(args, ['PIL'])
 
-    model = Model(args)
+    model = Model(**vars(args))
     dataset = SRData(args)
     args.logger = []
 
