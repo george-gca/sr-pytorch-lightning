@@ -12,6 +12,7 @@ models=(
 )
 
 # training params
+enable_training=1
 datasets_dir="/datasets"
 epochs=10
 gpu_to_use=0
@@ -39,7 +40,7 @@ check_val_every_n_epoch=5
 send_telegram_msg=1
 
 # enable prediction
-# predict=1
+# enable_predict=1
 # paths must be like
 # $datasets_dir/DATASET_1_NAME/*.png
 # $datasets_dir/DATASET_2_NAME/*.png
@@ -71,31 +72,33 @@ SECONDS=0
 for model in "${models[@]}"; do
   previous_time=$SECONDS
 
-  python train.py \
-      --accelerator gpu \
-      --check_val_every_n_epoch $check_val_every_n_epoch \
-      --datasets_dir $datasets_dir \
-      --default_root_dir "experiments/$model"_$save_dir \
-      --devices -1 \
-      --eval_datasets $eval_datasets \
-      --log_level info \
-      --log_loss_every_n_epochs $log_loss_every_n_epochs \
-      --loggers tensorboard \
-      --losses "$losses" \
-      --max_epochs $epochs \
-      --metrics $metrics \
-      --metrics_for_pbar PSNR \
-      --model $model \
-      --optimizer $optimizer \
-      --patch_size $patch_size \
-      --save_results -1 \
-      --save_results_from_epoch last \
-      --scale_factor $scale \
-      --train_datasets $train_dataset
+  if [ -n "$enable_training" ] ; then
+    python train.py \
+        --accelerator gpu \
+        --check_val_every_n_epoch $check_val_every_n_epoch \
+        --datasets_dir $datasets_dir \
+        --default_root_dir "experiments/$model"_$save_dir \
+        --devices -1 \
+        --eval_datasets $eval_datasets \
+        --log_level info \
+        --log_loss_every_n_epochs $log_loss_every_n_epochs \
+        --loggers tensorboard \
+        --losses "$losses" \
+        --max_epochs $epochs \
+        --metrics $metrics \
+        --metrics_for_pbar PSNR \
+        --model $model \
+        --optimizer $optimizer \
+        --patch_size $patch_size \
+        --save_results -1 \
+        --save_results_from_epoch last \
+        --scale_factor $scale \
+        --train_datasets $train_dataset
 
-  LogElapsedTime $(( $SECONDS - $previous_time )) "$model"_$save_dir $send_telegram_msg
+    LogElapsedTime $(( $SECONDS - $previous_time )) "$model"_$save_dir $send_telegram_msg
+  fi
 
-  if [ -n "$predict" ] ; then
+  if [ -n "$enable_predict" ] ; then
     python predict.py \
         --accelerator gpu \
         --checkpoint "experiments/$model"_$save_dir/checkpoints/last.ckpt \
