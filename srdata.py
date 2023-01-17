@@ -60,7 +60,7 @@ class _SRDatasetFromDirectory(Dataset):
         lr_data_dir: Union[str, Path] = None
     ):
         assert patch_size % scale_factor == 0
-        assert (mode == 'train' and patch_size != 0) or mode == 'eval'
+        assert (mode == 'train' and patch_size != 0) or mode != 'train'
 
         self._IMG_EXTENSIONS = {
             '.jpg', '.jpeg', '.png', '.ppm', '.bmp',
