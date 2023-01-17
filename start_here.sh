@@ -98,6 +98,7 @@ for model in "${models[@]}"; do
   if [ -n "$predict" ] ; then
     python predict.py \
         --accelerator gpu \
+        --checkpoint "experiments/$model"_$save_dir/checkpoints/last.ckpt \
         --datasets_dir $datasets_dir \
         --default_root_dir "experiments/$model"_$save_dir \
         --devices -1 \
