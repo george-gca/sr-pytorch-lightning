@@ -1,6 +1,8 @@
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
 from math import ceil, sqrt
+from typing import Any, Dict
 
+import piq
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -120,16 +122,13 @@ class SRGAN(SRModel):
         parser.add_argument('--ndf', type=int, default=64)
         return parser
 
-    def __init__(self, args: Namespace):
+    def __init__(self, ngf: int=64, ndf: int=64, n_blocks: int=16, **kwargs: Dict[str, Any]):
 
-        super(SRGAN, self).__init__()
-
-        # store parameters
-        self._batch_size = args.batch_size
+        super(SRGAN, self).__init__(**kwargs)
 
         # networks
-        self._net_G = _SRResNet(args.scale_factor, args.ngf, args.n_blocks)
-        self._net_D = _Discriminator(args.ndf)
+        self._net_G = _SRResNet(self._scale_factor, ngf, n_blocks)
+        self._net_D = _Discriminator(ndf)
 
         # training criterions
         self._criterion_MSE = nn.MSELoss()
@@ -138,8 +137,8 @@ class SRGAN(SRModel):
         self._criterion_TV = TVLoss()
 
         # validation metrics
-        self._criterion_PSNR = PSNR()
-        self._criterion_SSIM = SSIM(window_size=11, reduction='mean')
+        self._criterion_PSNR = piq.psnr()
+        self._criterion_SSIM = piq.ssim()
 
     def forward(self, input):
         return self._net_G(input)

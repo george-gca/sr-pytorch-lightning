@@ -1,4 +1,5 @@
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
+from typing import Any, Dict
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,8 +17,8 @@ class SRCNN(SRModel):
         parent = SRModel.add_model_specific_args(parent)
         return parent
 
-    def __init__(self, args: Namespace):
-        super(SRCNN, self).__init__(args)
+    def __init__(self, **kwargs: Dict[str, Any]):
+        super(SRCNN, self).__init__(**kwargs)
         self._net = nn.Sequential(
             nn.Conv2d(3, 64, 9, padding=4),
             nn.ReLU(True),

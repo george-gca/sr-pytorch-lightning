@@ -1,11 +1,11 @@
 import itertools
 import logging
 from abc import ABC, abstractmethod
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import kornia.augmentation as K
 import piq
@@ -90,7 +90,7 @@ class SRModel(pl.LightningModule, ABC):
         parser.add_argument('--metrics_for_pbar', type=str, nargs='+',
                             choices=[m for m in _supported_metrics],
                             default=['PSNR'])
-        parser.add_argument('--model_gpus', type=int, nargs='+', default=[],
+        parser.add_argument('--model_gpus', type=int, nargs='*', default=[],
                             help='which gpus to use when model parallel is selected')
         parser.add_argument('--model_parallel', action='store_true',
                             help='enable model parallelization')
@@ -104,45 +104,70 @@ class SRModel(pl.LightningModule, ABC):
                             choices=('none', 'all', 'half', 'last', 'quarter'))
         return parser
 
-    def __init__(self, args: Namespace):
+    def __init__(self,
+                 batch_size: int=16,
+                 default_root_dir: str='.',
+                 devices: Optional[Union[List[int], str, int]] = None,
+                 eval_datasets: List[str]=[],
+                 log_loss_every_n_epochs: int=5,
+                 log_weights_every_n_epochs: int=50,
+                 losses: str='l1',
+                 max_epochs: int=-1,
+                 metrics: List[str]=['PSNR', 'SSIM'],
+                 metrics_for_pbar: List[str]=['PSNR', 'SSIM'],
+                 model_gpus: List[str] = [],
+                 model_parallel: bool=False,
+                 optimizer: str='ADAM',
+                 optimizer_params: List[str]=[],
+                 patch_size: int=128,
+                 precision: int=32,
+                 predict_datasets: List[str]=[],
+                 save_results: int=-1,
+                 save_results_from_epoch: str='last',
+                 scale_factor: int=4,
+                 **kwargs: Dict[str, Any]):
+
         super(SRModel, self).__init__()
         self._logger = logging.getLogger(__name__)
-        self.save_hyperparameters(args)
+        self.save_hyperparameters()
 
         # used when printing weights summary
-        self.example_input_array = torch.zeros(
-            args.batch_size, 3, args.patch_size, args.patch_size)
+        self.example_input_array = torch.zeros(batch_size,
+                                                   3,
+                                                   patch_size // scale_factor,
+                                                   patch_size // scale_factor)
 
-        if args.save_results_from_epoch == 'all':
+        if save_results_from_epoch == 'all':
             self._center_crop = K.CenterCrop(96)
         else:
             self._center_crop = None
 
-        if args.model_parallel:
-            assert args.gpus is None or args.gpus == 0, 'Model parallel is not natively support in pytorch lightning,' \
-                f' so cpu mode must be given to Trainer (gpus=0), but is {args.gpus}'
+        if model_parallel:
+            assert devices is None or devices == 0, 'Model parallel is not natively support in pytorch lightning,' \
+                f' so cpu mode must be given to Trainer (gpus=0), but is {devices}'
             assert len(
-                args.model_gpus) > 1, 'For model parallel mode, more than 1 gpu must be provided in this argument'
-            self._model_gpus = args.model_gpus
+                model_gpus) > 1, 'For model parallel mode, more than 1 gpu must be provided in this argument'
+            self._model_gpus = model_gpus
             self._model_parallel = True
         else:
             self._model_gpus = None
             self._model_parallel = False
 
-        self._default_root_dir = args.default_root_dir
-        self._eval_datasets = args.eval_datasets
-        self._predict_datasets = args.predict_datasets
-        self._last_epoch = args.max_epochs
-        self._log_loss_every_n_epochs = args.log_loss_every_n_epochs
-        self._log_weights_every_n_epochs = args.log_weights_every_n_epochs
+        self._batch_size = batch_size
+        self._default_root_dir = default_root_dir
+        self._eval_datasets = eval_datasets
+        self._last_epoch = max_epochs
+        self._log_loss_every_n_epochs = log_loss_every_n_epochs
+        self._log_weights_every_n_epochs = log_weights_every_n_epochs
+        self._losses = self._create_losses(losses, patch_size, precision)
+        self._metrics = self._create_metrics(metrics)
+        self._metrics_for_pbar = metrics_for_pbar
+        self._optim, self._optim_params = self._parse_optimizer_config(optimizer, optimizer_params)
+        self._predict_datasets = predict_datasets
         self._save_hd_versions = None
-        self._losses = self._create_losses(args)
-        self._metrics = self._create_metrics(args)
-        self._metrics_for_pbar = args.metrics_for_pbar
-        self._optim, self._optim_params = self._parse_optimizer_config(args)
-        self._save_results = args.save_results
-        self._save_results_from_epoch = args.save_results_from_epoch
-        self._scale_factor = args.scale_factor
+        self._save_results = save_results
+        self._save_results_from_epoch = save_results_from_epoch
+        self._scale_factor = scale_factor
 
     def configure_optimizers(self):
         parameters_list = [self.parameters()]
@@ -430,12 +455,12 @@ class SRModel(pl.LightningModule, ABC):
 
         return img_sr
 
-    def _create_losses(self, args: Namespace) -> List[_SubLoss]:
+    def _create_losses(self, losses_str: str, patch_size: int, precision: int=32) -> List[_SubLoss]:
         # support for composite losses, like
         # 0.5 * L1 + 0.5 * adaptive
         self._logger.debug('Preparing loss functions:')
         losses = []
-        for loss in args.losses.split('+'):
+        for loss in losses_str.split('+'):
             loss_split = loss.split('*')
             if len(loss_split) == 2:
                 weight, loss_type = loss_split
@@ -453,9 +478,8 @@ class SRModel(pl.LightningModule, ABC):
             if loss_type in _supported_losses:
                 if loss_type == 'adaptive':
                     loss_function = _supported_losses[loss_type](
-                        image_size=(args.patch_size,
-                                    args.patch_size, 3),
-                        float_dtype=torch.float32 if args.precision == 32 else torch.float16,
+                        image_size=(patch_size, patch_size, 3),
+                        float_dtype=torch.float32 if precision == 32 else torch.float16,
                         device=torch.device(
                             f'cuda:{self._model_gpus[-1]}') if self._model_parallel else self.device)
                 else:
@@ -499,21 +523,21 @@ class SRModel(pl.LightningModule, ABC):
 
         return losses
 
-    def _create_metrics(self, args: Namespace) -> List[Tuple[str, Callable]]:
-        metrics = []
-        for metric in args.metrics:
+    def _create_metrics(self, metrics: List[str]) -> List[Tuple[str, Callable]]:
+        used_metrics = []
+        for metric in metrics:
             if metric in _supported_metrics:
                 if metric in {'FLIP', 'LPIPS'}:
                     # metrics that are objects and need to be created
-                    metrics.append((metric, _supported_metrics[metric]()))
+                    used_metrics.append((metric, _supported_metrics[metric]()))
                 else:
                     # metrics that are functions
-                    metrics.append((metric, _supported_metrics[metric]))
+                    used_metrics.append((metric, _supported_metrics[metric]))
             else:
                 raise AttributeError(
                     f'Couldn\'t find metric {metric}. Supported metrics: {", ".join(_supported_metrics)}')
 
-        return metrics
+        return used_metrics
 
     def _calculate_losses(self, img_sr: torch.Tensor, img_hr: torch.Tensor) -> Dict[str, torch.Tensor]:
         losses = []
@@ -591,15 +615,15 @@ class SRModel(pl.LightningModule, ABC):
 
         return metrics_dict
 
-    def _parse_optimizer_config(self, args: Namespace) -> Tuple[optim.Optimizer, Dict[str, Union[float, str]]]:
-        if args.optimizer in _supported_optimizers:
-            optimizer_class = _supported_optimizers[args.optimizer]
+    def _parse_optimizer_config(self, optimizer: str, optimizer_params: List[str]) -> Tuple[optim.Optimizer, Dict[str, Union[float, str]]]:
+        if optimizer in _supported_optimizers:
+            optimizer_class = _supported_optimizers[optimizer]
         else:
             raise ValueError(
-                f'Optimizer not recognized: {args.optimizer}. Supported optimizers: {", ".join(_supported_optimizers)}')
+                f'Optimizer not recognized: {optimizer}. Supported optimizers: {", ".join(_supported_optimizers)}')
 
         optimizer_params = {}
-        for param in args.optimizer_params:
+        for param in optimizer_params:
             param_name, param_value = param.strip().split('=')
             param_name = param_name.strip()
             if param_name in ['eps', 'lr', 'lr_decay', 'weight_decay']:

@@ -1,4 +1,5 @@
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
+from typing import Any, Dict
 
 import torch.nn as nn
 
@@ -20,24 +21,24 @@ class SRResNet(SRModel):
                             help='number of feature maps')
         return parser
 
-    def __init__(self, args: Namespace):
-        super(SRResNet, self).__init__(args)
+    def __init__(self, n_resblocks: int=16, n_feats: int=64, **kwargs: Dict[str, Any]):
+        super(SRResNet, self).__init__(**kwargs)
 
         self.head = BasicBlock(
-            in_channels=3, out_channels=args.n_feats, kernel_size=9, act=nn.PReLU())
+            in_channels=3, out_channels=n_feats, kernel_size=9, act=nn.PReLU())
 
         m_body = [
-            ResBlock(n_feats=args.n_feats, kernel_size=3,
-                     n_conv_layers=2, norm=nn.BatchNorm2d(args.n_feats), act=nn.PReLU()) for _ in range(args.n_resblocks)
+            ResBlock(n_feats=n_feats, kernel_size=3,
+                     n_conv_layers=2, norm=nn.BatchNorm2d(n_feats), act=nn.PReLU()) for _ in range(n_resblocks)
         ]
         m_body.append(BasicBlock(
-            in_channels=args.n_feats, out_channels=args.n_feats, kernel_size=3, norm=nn.BatchNorm2d(args.n_feats), act=None))
+            in_channels=n_feats, out_channels=n_feats, kernel_size=3, norm=nn.BatchNorm2d(n_feats), act=None))
         self.body = nn.Sequential(*m_body)
 
         m_tail = [
             UpscaleBlock(
-                self._scale_factor, n_feats=args.n_feats, act=nn.PReLU()),
-            DefaultConv2d(in_channels=args.n_feats,
+                self._scale_factor, n_feats=n_feats, act=nn.PReLU()),
+            DefaultConv2d(in_channels=n_feats,
                           out_channels=3, kernel_size=9)
         ]
         self.tail = nn.Sequential(*m_tail)

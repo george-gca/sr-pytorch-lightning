@@ -1,4 +1,5 @@
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
+from typing import Any, Dict
 
 import torch
 import torch.nn as nn
@@ -69,8 +70,8 @@ class WDSR(SRModel):
                             choices=['A', 'B'])
         return parser
 
-    def __init__(self, args: Namespace):
-        super(WDSR, self).__init__(args)
+    def __init__(self, type: str='B', n_feats: int=128, n_resblocks: int=16, res_scale: int=1, **kwargs: Dict[str, Any]):
+        super(WDSR, self).__init__(**kwargs)
         kernel_size = 3
 
         def wn(x): return nn.utils.weight_norm(x)
@@ -81,23 +82,23 @@ class WDSR(SRModel):
 
         head = []
         head.append(
-            wn(nn.Conv2d(3, args.n_feats, 3, padding=3//2)))
+            wn(nn.Conv2d(3, n_feats, 3, padding=3//2)))
 
         body = []
 
-        if args.type == 'A':
+        if type == 'A':
             block = _Block_A
         else:  # if args.type == 'B':
             block = _Block_B
 
-        for i in range(args.n_resblocks):
+        for i in range(n_resblocks):
             body.append(
-                block(args.n_feats, kernel_size, act=nn.ReLU(True), res_scale=args.res_scale, wn=wn))
+                block(n_feats, kernel_size, act=nn.ReLU(True), res_scale=res_scale, wn=wn))
 
         tail = []
         out_feats = self._scale_factor * self._scale_factor * 3
         tail.append(
-            wn(nn.Conv2d(args.n_feats, out_feats, 3, padding=3//2)))
+            wn(nn.Conv2d(n_feats, out_feats, 3, padding=3//2)))
         tail.append(nn.PixelShuffle(self._scale_factor))
 
         skip = []
