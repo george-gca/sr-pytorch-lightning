@@ -59,7 +59,7 @@ class _SRDatasetFromDirectory(Dataset):
         lr_data_dir: Optional[Union[str, Path]] = None,
         hr_data_dir: Optional[Union[str, Path]] = None,
     ):
-        assert patch_size % scale_factor == 0
+        assert patch_size % scale_factor == 0, f'patch_size ({patch_size}) should be divisible by scale_factor ({scale_factor})'
         assert (mode == 'train' and patch_size != 0) or mode != 'train'
         assert hr_data_dir is not None or mode == 'predict'
         assert lr_data_dir is not None or mode != 'predict'
@@ -343,7 +343,7 @@ class SRData(LightningDataModule):
         if 'patch_size' in args:
             self._patch_size = args.patch_size
         else:
-            self._patch_size = 1
+            self._patch_size = 128
 
     def prepare_data(self):
         # download, split, etc...
@@ -432,6 +432,7 @@ class SRData(LightningDataModule):
                             hr_data_dir=self._datasets_dir / dataset / 'HR',
                             lr_data_dir=self._datasets_dir / dataset / 'LR' / f'X{self._scale_factor}',
                             scale_factor=self._scale_factor,
+                            mode='eval',
                             patch_size=self._patch_size,
                             augment=self._augment
                         ))
@@ -439,6 +440,7 @@ class SRData(LightningDataModule):
                         datasets.append(_SRDatasetFromDirectory(
                             hr_data_dir=self._datasets_dir / dataset / 'HR',
                             scale_factor=self._scale_factor,
+                            mode='eval',
                             patch_size=self._patch_size,
                             augment=self._augment
                         ))
@@ -452,6 +454,7 @@ class SRData(LightningDataModule):
                 datasets.append(_SRDatasetFromDirectory(
                     lr_data_dir=self._datasets_dir / dataset,
                     scale_factor=self._scale_factor,
+                    mode='predict',
                     patch_size=self._patch_size,
                     augment=self._augment
                 ))
