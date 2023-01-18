@@ -52,27 +52,33 @@ class _CropIfOddSize:
 class _SRDatasetFromDirectory(Dataset):
     def __init__(
         self,
-        hr_data_dir: Union[str, Path],
         scale_factor: int,
         patch_size: int = 0,
         mode: str = 'train',
         augment: bool = False,
-        lr_data_dir: Union[str, Path] = None
+        lr_data_dir: Optional[Union[str, Path]] = None,
+        hr_data_dir: Optional[Union[str, Path]] = None,
     ):
         assert patch_size % scale_factor == 0
         assert (mode == 'train' and patch_size != 0) or mode != 'train'
+        assert hr_data_dir is not None or mode == 'predict'
+        assert lr_data_dir is not None or mode != 'predict'
 
         self._IMG_EXTENSIONS = {
             '.jpg', '.jpeg', '.png', '.ppm', '.bmp',
         }
 
-        if isinstance(hr_data_dir, str):
-            hr_data_dir = Path(hr_data_dir)
-
         self._patch_size = patch_size
         self._scale_factor = scale_factor
-        self._hr_filenames = [
-            f for f in hr_data_dir.glob('*') if self._is_image(f)]
+
+        if hr_data_dir is not None:
+            if isinstance(hr_data_dir, str):
+                hr_data_dir = Path(hr_data_dir)
+
+            self._hr_filenames = [
+                f for f in hr_data_dir.glob('*') if self._is_image(f)]
+        else:
+            self._hr_filenames = None
 
         if lr_data_dir is not None:
             if isinstance(lr_data_dir, str):
@@ -116,7 +122,20 @@ class _SRDatasetFromDirectory(Dataset):
                     ])
                 else:
                     self._transforms = None
-        else:
+
+        elif mode == 'predict':
+            self._lr_filenames.sort()
+
+            if patch_size > 0:
+                self._transforms = transforms.Compose([
+                    transforms.CenterCrop(patch_size)
+                ])
+            else:
+                self._transforms = transforms.Compose([
+                    _CropIfOddSize(self._scale_factor)
+                ])
+
+        else:  # mode == 'eval' or mode == 'test':
             self._hr_filenames.sort()
             if self._lr_filenames is not None:
                 self._lr_filenames.sort()
@@ -131,7 +150,11 @@ class _SRDatasetFromDirectory(Dataset):
                 ])
 
     def __getitem__(self, index: int) -> Dict[str, Union[str, Tensor]]:
-        filename = self._hr_filenames[index]
+        if self._hr_filenames is not None:
+            filename = self._hr_filenames[index]
+        else:
+            filename = self._lr_filenames[index]
+
         img = Image.open(filename).convert('RGB')
         if self._transforms is not None:
             img_hr = self._transforms(img)
@@ -151,7 +174,10 @@ class _SRDatasetFromDirectory(Dataset):
         return {'lr': TF.to_tensor(img_lr), 'hr': TF.to_tensor(img_hr), 'path': filename.stem}
 
     def __len__(self) -> int:
-        return len(self._hr_filenames)
+        if self._hr_filenames is not None:
+            return len(self._hr_filenames)
+        else:
+            return len(self._lr_filenames)
 
     def _is_image(self, path: Path) -> bool:
         return path.suffix.lower() in self._IMG_EXTENSIONS
@@ -300,16 +326,24 @@ class SRData(LightningDataModule):
     def __init__(self, args: Namespace):
         super(SRData, self).__init__()
         self._augment = not args.no_augment
-        self._batch_size = args.batch_size
         self._datasets_dir = Path(args.datasets_dir)
-        self._patch_size = args.patch_size
-        self._scale_factor = args.scale_factor
-        self._train_datasets_names = args.train_datasets.copy()
-        self._eval_datasets_names = args.eval_datasets.copy()
-        self._predict_datasets_names = args.predict_datasets.copy()
-        self._train_datasets = None
         self._eval_datasets = None
+        self._eval_datasets_names = args.eval_datasets.copy()
         self._predict_datasets = None
+        self._predict_datasets_names = args.predict_datasets.copy()
+        self._scale_factor = args.scale_factor
+        self._train_datasets = None
+        self._train_datasets_names = args.train_datasets.copy()
+
+        if 'batch_size' in args:
+            self._batch_size = args.batch_size
+        else:
+            self._batch_size = 1
+
+        if 'patch_size' in args:
+            self._patch_size = args.patch_size
+        else:
+            self._patch_size = 1
 
     def prepare_data(self):
         # download, split, etc...
@@ -414,12 +448,13 @@ class SRData(LightningDataModule):
         # if stage in (None, 'test'):
         if stage in ('predict',):
             datasets = []
-            datasets.append(_SRDatasetFromDirectory(
-                lr_data_dir=self._datasets_dir / dataset,
-                scale_factor=self._scale_factor,
-                patch_size=self._patch_size,
-                augment=self._augment
-            ))
+            for dataset in self._predict_datasets_names:
+                datasets.append(_SRDatasetFromDirectory(
+                    lr_data_dir=self._datasets_dir / dataset,
+                    scale_factor=self._scale_factor,
+                    patch_size=self._patch_size,
+                    augment=self._augment
+                ))
 
             self._predict_datasets = datasets
 
