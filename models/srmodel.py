@@ -455,12 +455,12 @@ class SRModel(pl.LightningModule, ABC):
 
         return img_sr
 
-    def _create_losses(self, losses: str, patch_size: int, precision: int=32) -> List[_SubLoss]:
+    def _create_losses(self, losses_str: str, patch_size: int, precision: int=32) -> List[_SubLoss]:
         # support for composite losses, like
         # 0.5 * L1 + 0.5 * adaptive
         self._logger.debug('Preparing loss functions:')
         losses = []
-        for loss in losses.split('+'):
+        for loss in losses_str.split('+'):
             loss_split = loss.split('*')
             if len(loss_split) == 2:
                 weight, loss_type = loss_split
