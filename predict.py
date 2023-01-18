@@ -78,7 +78,7 @@ def setup_log(args: argparse.Namespace, logs_to_silence: List[str] = []) -> logg
 def main(Model: models.SRModel, args: argparse.Namespace):
     logger = setup_log(args, ['PIL'])
 
-    model = Model.load_from_checkpoint(args.checkpoint)
+    model = Model.load_from_checkpoint(args.checkpoint, predict_datasets=args.predict_datasets)
     dataset = SRData(args)
     args.logger = []
 
