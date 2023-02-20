@@ -1,9 +1,9 @@
 <p>
-  <img alt="Python 3" src="https://img.shields.io/badge/-Python-2b5b84?style=flat-square&logo=python&logoColor=white" />
-  <img alt="PyTorch" src="https://img.shields.io/badge/-PyTorch-ee4c2c?style=flat-square&logo=pytorch&logoColor=white" />
-  <img alt="PyTorch Lightning" src="https://img.shields.io/badge/-PyTorch%20Lightning-792de4?style=flat-square&logo=pytorch-lightning&logoColor=white" />
-  <img alt="Docker" src="https://img.shields.io/badge/-Docker-0073ec?style=flat-square&logo=docker&logoColor=white" />
-  <img alt="Comet ML" src="https://custom-icon-badges.herokuapp.com/badge/Comet%20ML-262c3e?style=flat-square&logo=logo_comet_ml&logoColor=white" />
+  <a href="https://www.python.org/"><img alt="Python 3" src="https://img.shields.io/badge/-Python-2b5b84?style=flat-square&logo=python&logoColor=white" /></a>
+  <a href="https://pytorch.org/"><img alt="PyTorch" src="https://img.shields.io/badge/-PyTorch-ee4c2c?style=flat-square&logo=pytorch&logoColor=white" /></a>
+  <a href="https://www.pytorchlightning.ai/"><img alt="PyTorch Lightning" src="https://img.shields.io/badge/-PyTorch%20Lightning-792de4?style=flat-square&logo=pytorch-lightning&logoColor=white" /></a>
+  <a href="https://www.docker.com/"><img alt="Docker" src="https://img.shields.io/badge/-Docker-0073ec?style=flat-square&logo=docker&logoColor=white" /></a>
+  <a href="https://www.comet.com/"><img alt="Comet ML" src="https://custom-icon-badges.herokuapp.com/badge/Comet%20ML-262c3e?style=flat-square&logo=logo_comet_ml&logoColor=white" /></a>
 </p>
 
 # sr-pytorch-lightning
