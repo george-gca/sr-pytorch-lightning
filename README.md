@@ -3,6 +3,7 @@
   <img alt="PyTorch" src="https://img.shields.io/badge/-PyTorch-ee4c2c?style=flat-square&logo=pytorch&logoColor=white" />
   <img alt="PyTorch Lightning" src="https://img.shields.io/badge/-PyTorch%20Lightning-792de4?style=flat-square&logo=pytorch-lightning&logoColor=white" />
   <img alt="Docker" src="https://img.shields.io/badge/-Docker-0073ec?style=flat-square&logo=docker&logoColor=white" />
+  <img alt="Comet ML" src="https://custom-icon-badges.herokuapp.com/badge/Comet%20ML-262c3e?style=flat-square&logo=logo_comet_ml&logoColor=white" />
 </p>
 
 # sr-pytorch-lightning
