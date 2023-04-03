@@ -159,12 +159,12 @@ class SRModel(pl.LightningModule, ABC):
         self._last_epoch = max_epochs
         self._log_loss_every_n_epochs = log_loss_every_n_epochs
         self._log_weights_every_n_epochs = log_weights_every_n_epochs
+        self._save_hd_versions = None
         self._losses = self._create_losses(losses, patch_size, precision)
         self._metrics = self._create_metrics(metrics)
         self._metrics_for_pbar = metrics_for_pbar
         self._optim, self._optim_params = self._parse_optimizer_config(optimizer, optimizer_params)
         self._predict_datasets = predict_datasets
-        self._save_hd_versions = None
         self._save_results = save_results
         self._save_results_from_epoch = save_results_from_epoch
         self._scale_factor = scale_factor
