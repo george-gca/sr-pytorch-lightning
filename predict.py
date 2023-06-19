@@ -187,6 +187,7 @@ if __name__ == '__main__':
                         choices=tuple(available_models),
                         default='srcnn')
     parser.add_argument('-s', '--scale_factor', type=int, default=4)
+    parser.add_argument('-w', '--predict_whole_img', action=argparse.BooleanOptionalAction)
     args, remaining = parser.parse_known_args()
 
     # load model class
