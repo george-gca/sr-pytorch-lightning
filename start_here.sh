@@ -1,6 +1,8 @@
 #!/bin/bash
 
-. utils.sh
+telegram-send "Execution of start_here.sh started"
+
+source utils.sh
 
 # ==================================================================
 # region variables
@@ -40,13 +42,18 @@ check_val_every_n_epoch=5
 send_telegram_msg=1
 
 # enable prediction
-# enable_predict=1
+enable_predict=1
+enable_predict_whole_lr=1 # optional, enable if the prediction images are the size of patch
 # paths must be like
 # $datasets_dir/DATASET_1_NAME/*.png
 # $datasets_dir/DATASET_2_NAME/*.png
-# predict_datasets="DATASET_1_NAME DATASET_2_NAME"
+predict_datasets="G10_downscaled_x2"
 
 # endregion
+
+# enable metrics (optinal, but only enable if prediction=1)
+enable_metrics=1
+original_datasets="G10_original"
 
 # ==================================================================
 # region configuring and running
@@ -71,13 +78,15 @@ SECONDS=0
 
 for model in "${models[@]}"; do
   previous_time=$SECONDS
+  upper_case_model_name=${model^^}
 
   if [ -n "$enable_training" ] ; then
+    telegram-send "Training enabled and starting"
     python train.py \
         --accelerator gpu \
         --check_val_every_n_epoch $check_val_every_n_epoch \
         --datasets_dir $datasets_dir \
-        --default_root_dir "experiments/$model"_$save_dir \
+        --default_root_dir "experiments/$upper_case_model_name"_$save_dir \
         --devices -1 \
         --eval_datasets $eval_datasets \
         --log_level info \
@@ -99,18 +108,35 @@ for model in "${models[@]}"; do
   fi
 
   if [ -n "$enable_predict" ] ; then
+    telegram-send "Predict enabled and starting"
     python predict.py \
         --accelerator gpu \
-        --checkpoint "experiments/$model"_$save_dir/checkpoints/last.ckpt \
+        --checkpoint "experiments/$upper_case_model_name"_$save_dir/checkpoints/last.ckpt \
         --datasets_dir $datasets_dir \
-        --default_root_dir "experiments/$model"_$save_dir \
+        --default_root_dir "experiments/$upper_case_model_name"_$save_dir \
         --devices -1 \
         --log_level info \
         --loggers tensorboard \
         --model $model \
         --predict_datasets $predict_datasets \
-        --scale_factor $scale
+        --scale_factor $scale \
+        ${enable_predict_whole_lr:+--predict_whole_img}
 
     LogElapsedTime $(( $SECONDS - $previous_time )) "$model"_$save_dir $send_telegram_msg
   fi
+
+  if [ -n "$enable_metrics" ] ; then
+    telegram-send "Tracking metrics"
+    python metrics.py \
+        --datasets_dir $datasets_dir \
+        --default_root_dir "experiments/$upper_case_model_name"_$save_dir \
+        --predict_datasets $predict_datasets \
+        --original_datasets $original_datasets
+
+    LogElapsedTime $(( $SECONDS - $previous_time )) "$model"_$save_dir $send_telegram_msg
+  fi
+  telegram-send "Tracking metrics finished"
+
 done
+
+telegram-send "Execution of start_here.sh finished"

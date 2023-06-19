@@ -168,8 +168,9 @@ class _SRDatasetFromDirectory(Dataset):
             img_lr = Image.open(self._lr_filenames[index]).convert('RGB')
             img_lr, img_hr = self._get_patch(img_lr, img_hr, self._patch_size, self._scale_factor)
 
-        assert img_lr.size[-2] == img_hr.size[-2] // self._scale_factor and \
-            img_lr.size[-1] == img_hr.size[-1] // self._scale_factor
+        if not self._predict_whole_img:
+            assert img_lr.size[-2] == img_hr.size[-2] // self._scale_factor and \
+                img_lr.size[-1] == img_hr.size[-1] // self._scale_factor
 
         return {'lr': TF.to_tensor(img_lr), 'hr': TF.to_tensor(img_hr), 'path': filename.stem}
 
@@ -202,6 +203,8 @@ class _SRDatasetFromDirectory(Dataset):
         lr_patch = TF.crop(lr_image, lr_x, lr_y, lr_patch_size, lr_patch_size)
         hr_patch = TF.crop(hr_image, hr_x, hr_y, patch_size, patch_size)
 
+        if self._predict_whole_img:
+            return lr_image, hr_patch
         return lr_patch, hr_patch
 
 
@@ -334,6 +337,7 @@ class SRData(LightningDataModule):
         self._scale_factor = args.scale_factor
         self._train_datasets = None
         self._train_datasets_names = args.train_datasets.copy()
+        self._predict_whole_img = args.predict_whole_img
 
         if 'batch_size' in args:
             self._batch_size = args.batch_size
