@@ -19,6 +19,7 @@ RUN_STRING = bash start_here.sh
 # from a different session it will run without issues
 CONTAINER_NAME = sr-pytorch-$(USER)-$(shell echo $$STY | cut -d'.' -f2)
 CONTAINER_FILE = sr-pytorch-$(USER).tar
+DOCKER_RUN = docker run --gpus all
 HOSTNAME = docker-$(shell hostname)
 IMAGE_NAME = $(USER)/sr-pytorch
 # username inside the container
@@ -44,7 +45,7 @@ WORK_MOUNT_STRING = --mount type=bind,source=$(WORK_DIR),target=$(WORK_PATH)
 # that have the same id as the local user. This is useful to avoid creating outputs
 # as a root user, since all generated data will be owned by the local user
 build:
-	nvidia-docker build \
+	docker build \
 		--build-arg GROUPID=$(shell id -g) \
 		--build-arg GROUPNAME=$(shell id -gn) \
 		--build-arg USERID=$(shell id -u) \
@@ -61,22 +62,22 @@ build:
 
 # Remove the image
 clean:
-	nvidia-docker rmi $(IMAGE_NAME)
+	docker rmi $(IMAGE_NAME)
 
 
 # Load image from file
 load:
-	nvidia-docker load -i $(CONTAINER_FILE)
+	docker load -i $(CONTAINER_FILE)
 
 
 # Kill running container
 kill:
-	nvidia-docker kill $(CONTAINER_NAME)
+	docker kill $(CONTAINER_NAME)
 
 
 # Run RUN_STRING inside container
 run:
-	nvidia-docker run \
+	$(DOCKER_RUN) \
 		$(DATASET_MOUNT_STRING) \
 		$(WORK_MOUNT_STRING) \
 		$(CACHE_MOUNT_STRING) \
@@ -88,12 +89,12 @@ run:
 
 # Save image to file
 save:
-	nvidia-docker save -o $(CONTAINER_FILE) $(IMAGE_NAME)
+	docker save -o $(CONTAINER_FILE) $(IMAGE_NAME)
 
 
 # Start container by opening shell
 start:
-	nvidia-docker run \
+	$(DOCKER_RUN) \
 		$(DATASET_MOUNT_STRING) \
 		$(WORK_MOUNT_STRING) \
 		$(CACHE_MOUNT_STRING) \
@@ -104,6 +105,6 @@ start:
 
 # Test image by printing some info
 test:
-	nvidia-docker run \
+	$(DOCKER_RUN) \
 		$(RUN_CONFIG_STRING) \
 		python -c 'import torch as t; print("Found", t.cuda.device_count(), "devices:"); [print (f"\t{t.cuda.get_device_properties(i)}") for i in range(t.cuda.device_count())]'
