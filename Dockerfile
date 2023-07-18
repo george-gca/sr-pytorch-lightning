@@ -63,6 +63,7 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         piq \
         prettytable \
         pytorch-lightning \
+        "pytorch-lightning[extra]" \
         tensorboard \
         torch_optimizer \
         tqdm && \
