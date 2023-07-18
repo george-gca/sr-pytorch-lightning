@@ -81,9 +81,11 @@ class DDBPN(SRModel):
         nr = 32
         self.depth = 6
 
-        self.sub_mean = MeanShift()
+        if self._channels == 3:
+            self.sub_mean = MeanShift()
+
         initial = [
-            nn.Conv2d(3, n0, 3, padding=1),
+            nn.Conv2d(self._channels, n0, 3, padding=1),
             nn.PReLU(n0),
             nn.Conv2d(n0, nr, 1),
             nn.PReLU(nr)
@@ -109,14 +111,17 @@ class DDBPN(SRModel):
             channels += nr
 
         reconstruction = [
-            nn.Conv2d(self.depth * nr, 3, 3, padding=1)
+            nn.Conv2d(self.depth * nr, self._channels, 3, padding=1)
         ]
         self.reconstruction = nn.Sequential(*reconstruction)
 
-        self.add_mean = MeanShift(sign=1)
+        if self._channels == 3:
+            self.add_mean = MeanShift(sign=1)
 
     def forward(self, x):
-        x = self.sub_mean(x)
+        if self._channels == 3:
+            x = self.sub_mean(x)
+
         x = self.initial(x)
 
         h_list = []
@@ -131,6 +136,8 @@ class DDBPN(SRModel):
 
         h_list.append(self.upmodules[-1](torch.cat(l_list, dim=1)))
         out = self.reconstruction(torch.cat(h_list, dim=1))
-        out = self.add_mean(out)
+
+        if self._channels == 3:
+            out = self.add_mean(out)
 
         return out

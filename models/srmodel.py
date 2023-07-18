@@ -77,6 +77,8 @@ class SRModel(pl.LightningModule, ABC):
     @staticmethod
     def add_model_specific_args(parent: ArgumentParser) -> ArgumentParser:
         parser = ArgumentParser(parents=[parent], add_help=False)
+        parser.add_argument('--channels',
+                            type=int, default=3)
         parser.add_argument('--log_loss_every_n_epochs',
                             type=int, default=1)
         parser.add_argument('--log_weights_every_n_epochs',
@@ -106,6 +108,7 @@ class SRModel(pl.LightningModule, ABC):
 
     def __init__(self,
                  batch_size: int=16,
+                 channels: int=3,
                  default_root_dir: str='.',
                  devices: Optional[Union[List[int], str, int]] = None,
                  eval_datasets: List[str]=[],
@@ -133,7 +136,7 @@ class SRModel(pl.LightningModule, ABC):
 
         # used when printing weights summary
         self.example_input_array = torch.zeros(batch_size,
-                                                   3,
+                                                   channels,
                                                    patch_size // scale_factor,
                                                    patch_size // scale_factor)
 
@@ -154,6 +157,7 @@ class SRModel(pl.LightningModule, ABC):
             self._model_parallel = False
 
         self._batch_size = batch_size
+        self._channels = channels
         self._default_root_dir = default_root_dir
         self._eval_datasets = eval_datasets
         self._last_epoch = max_epochs
@@ -346,15 +350,13 @@ class SRModel(pl.LightningModule, ABC):
 
                 elif isinstance(logger, CometLogger):
                     for img_to_save, suffix in zip(imgs_to_save, imgs_suffixes):
-                        if img_to_save.size()[1] > 1:
-                            # comet logger currently don't support greyscale images
-                            logger.experiment.log_image(
-                                img_to_save.view(
-                                    *img_to_save.size()[1:]).cpu().detach(),
-                                name=f'{image_path}{suffix}',
-                                image_channels='first',
-                                step=self.global_step
-                            )
+                        logger.experiment.log_image(
+                            img_to_save.view(
+                                *img_to_save.size()[1:]).cpu().detach(),
+                            name=f'{image_path}{suffix}',
+                            image_channels='first',
+                            step=self.global_step
+                        )
 
             # log images metrics
             image_metrics = {}

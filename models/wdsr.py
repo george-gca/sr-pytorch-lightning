@@ -76,13 +76,14 @@ class WDSR(SRModel):
 
         def wn(x): return nn.utils.weight_norm(x)
 
-        # computed on training images of DIV2K dataset
-        self.rgb_mean = torch.FloatTensor(
-            [0.4488, 0.4371, 0.4040]).view([1, 3, 1, 1])
+        if self._channels == 3:
+            # computed on training images of DIV2K dataset
+            self.rgb_mean = torch.FloatTensor(
+                [0.4488, 0.4371, 0.4040]).view([1, 3, 1, 1])
 
         head = []
         head.append(
-            wn(nn.Conv2d(3, n_feats, 3, padding=3//2)))
+            wn(nn.Conv2d(self._channels, n_feats, 3, padding=3//2)))
 
         body = []
 
@@ -96,7 +97,7 @@ class WDSR(SRModel):
                 block(n_feats, kernel_size, act=nn.ReLU(True), res_scale=res_scale, wn=wn))
 
         tail = []
-        out_feats = self._scale_factor * self._scale_factor * 3
+        out_feats = self._scale_factor * self._scale_factor * self._channels
         tail.append(
             wn(nn.Conv2d(n_feats, out_feats, 3, padding=3//2)))
         tail.append(nn.PixelShuffle(self._scale_factor))
@@ -114,8 +115,9 @@ class WDSR(SRModel):
         self.skip = nn.Sequential(*skip)
 
     def forward(self, x):
-        self.rgb_mean = self.rgb_mean.to(self.device)
-        x = x - self.rgb_mean
+        if self._channels == 3:
+            self.rgb_mean = self.rgb_mean.to(self.device)
+            x = x - self.rgb_mean
 
         s = self.skip(x)
         x = self.head(x)
@@ -124,6 +126,7 @@ class WDSR(SRModel):
         x = self.tail(x)
         x += s
 
-        x = x + self.rgb_mean
+        if self._channels == 3:
+            x = x + self.rgb_mean
 
         return x

@@ -100,11 +100,12 @@ class RCAN(SRModel):
         super(RCAN, self).__init__(**kwargs)
         kernel_size = 3
 
-        # RGB mean for DIV2K
-        self.sub_mean = MeanShift()
+        if self._channels == 3:
+            # RGB mean for DIV2K
+            self.sub_mean = MeanShift()
 
         # define head module
-        modules_head = [DefaultConv2d(in_channels=3,
+        modules_head = [DefaultConv2d(in_channels=self._channels,
                              out_channels=n_feats, kernel_size=kernel_size)]
 
         # define body module
@@ -119,21 +120,27 @@ class RCAN(SRModel):
         # define tail module
         modules_tail = [
             UpscaleBlock(self._scale_factor, n_feats),
-            DefaultConv2d(in_channels=n_feats, out_channels=3, kernel_size=kernel_size)]
+            DefaultConv2d(in_channels=n_feats, out_channels=self._channels, kernel_size=kernel_size)]
 
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)
         self.tail = nn.Sequential(*modules_tail)
-        self.add_mean = MeanShift(sign=1)
+
+        if self._channels == 3:
+            self.add_mean = MeanShift(sign=1)
 
     def forward(self, x):
-        x = self.sub_mean(x)
+        if self._channels == 3:
+            x = self.sub_mean(x)
+
         x = self.head(x)
 
         res = self.body(x)
         res += x
 
         x = self.tail(res)
-        x = self.add_mean(x)
+
+        if self._channels == 3:
+            x = self.add_mean(x)
 
         return x

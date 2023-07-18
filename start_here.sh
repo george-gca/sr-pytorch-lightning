@@ -31,8 +31,9 @@ train_dataset="DIV2K"
 eval_datasets="Set5 Set14"
 
 # model params
-scale=4
+channels=3
 patch_size=128
+scale=4
 
 # log params
 log_loss_every_n_epochs=2
@@ -75,6 +76,7 @@ for model in "${models[@]}"; do
   if [ -n "$enable_training" ] ; then
     python train.py \
         --accelerator gpu \
+        --channels $channels \
         --check_val_every_n_epoch $check_val_every_n_epoch \
         --datasets_dir $datasets_dir \
         --default_root_dir "experiments/$model"_$save_dir \
@@ -101,6 +103,7 @@ for model in "${models[@]}"; do
   if [ -n "$enable_predict" ] ; then
     python predict.py \
         --accelerator gpu \
+        --channels $channels \
         --checkpoint "experiments/$model"_$save_dir/checkpoints/last.ckpt \
         --datasets_dir $datasets_dir \
         --default_root_dir "experiments/$model"_$save_dir \

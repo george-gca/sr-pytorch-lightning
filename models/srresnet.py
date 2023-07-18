@@ -25,7 +25,7 @@ class SRResNet(SRModel):
         super(SRResNet, self).__init__(**kwargs)
 
         self.head = BasicBlock(
-            in_channels=3, out_channels=n_feats, kernel_size=9, act=nn.PReLU())
+            in_channels=self._channels, out_channels=n_feats, kernel_size=9, act=nn.PReLU())
 
         m_body = [
             ResBlock(n_feats=n_feats, kernel_size=3,
@@ -39,7 +39,7 @@ class SRResNet(SRModel):
             UpscaleBlock(
                 self._scale_factor, n_feats=n_feats, act=nn.PReLU()),
             DefaultConv2d(in_channels=n_feats,
-                          out_channels=3, kernel_size=9)
+                          out_channels=self._channels, kernel_size=9)
         ]
         self.tail = nn.Sequential(*m_tail)
 
