@@ -66,7 +66,7 @@ class RDN(SRModel):
 
         # Shallow feature extraction net
         self.SFENet1 = nn.Conv2d(
-            3, G0, kernel_size, padding=(kernel_size-1)//2, stride=1)
+            self._channels, G0, kernel_size, padding=(kernel_size-1)//2, stride=1)
         self.SFENet2 = nn.Conv2d(G0, G0, kernel_size, padding=(
             kernel_size-1)//2, stride=1)
 
@@ -101,7 +101,7 @@ class RDN(SRModel):
                 nn.Conv2d(G, G * 4, kernel_size,
                           padding=(kernel_size-1)//2, stride=1),
                 nn.PixelShuffle(2),
-                nn.Conv2d(G, 3, kernel_size,
+                nn.Conv2d(G, self._channels, kernel_size,
                           padding=(kernel_size-1)//2, stride=1)
             ])
         else:

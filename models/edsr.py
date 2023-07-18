@@ -27,10 +27,11 @@ class EDSR(SRModel):
         super(EDSR, self).__init__(**kwargs)
         kernel_size = 3
 
-        self.sub_mean = MeanShift()
-        self.add_mean = MeanShift(sign=1)
+        if self._channels == 3:
+            self.sub_mean = MeanShift()
+            self.add_mean = MeanShift(sign=1)
 
-        m_head = [DefaultConv2d(in_channels=3,
+        m_head = [DefaultConv2d(in_channels=self._channels,
                                 out_channels=n_feats, kernel_size=kernel_size)]
 
         m_body = [
@@ -41,7 +42,7 @@ class EDSR(SRModel):
 
         m_tail = [
             UpscaleBlock(self._scale_factor, n_feats),
-            DefaultConv2d(in_channels=n_feats, out_channels=3,
+            DefaultConv2d(in_channels=n_feats, out_channels=self._channels,
                           kernel_size=kernel_size)
         ]
 
@@ -50,13 +51,17 @@ class EDSR(SRModel):
         self.tail = nn.Sequential(*m_tail)
 
     def forward(self, x):
-        x = self.sub_mean(x)
+        if self._channels == 3:
+            x = self.sub_mean(x)
+
         x = self.head(x)
 
         res = self.body(x)
         res += x
 
         x = self.tail(res)
-        x = self.add_mean(x)
+
+        if self._channels == 3:
+            x = self.add_mean(x)
 
         return x

@@ -26,7 +26,7 @@ class _SRResNet(nn.Module):
 
         self._head = nn.Sequential(
             nn.ReflectionPad2d(4),
-            nn.Conv2d(3, ngf, kernel_size=9),
+            nn.Conv2d(self._channels, ngf, kernel_size=9),
             nn.PReLU()
         )
         self._body = nn.Sequential(
@@ -38,7 +38,7 @@ class _SRResNet(nn.Module):
         self._tail = nn.Sequential(
             UpscaleBlock(scale_factor, ngf, act=nn.PReLU),
             nn.ReflectionPad2d(4),
-            nn.Conv2d(ngf, 3, kernel_size=9),
+            nn.Conv2d(ngf, self._channels, kernel_size=9),
             nn.Tanh()
         )
 
