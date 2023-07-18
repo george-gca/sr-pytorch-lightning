@@ -1,18 +1,19 @@
-from functools import partial
 import logging
 import multiprocessing
 import random
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Optional, Set, Tuple, Union
 
+import numpy.typing as npt
+import numpy as np
 from PIL import Image
 from PIL.Image import Image as Img
 from pytorch_lightning import LightningDataModule
 from torch import Tensor
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
-from torchvision import transforms
 from torchvision.transforms import functional as TF
+from torchvision.transforms import InterpolationMode
 
 from datasets import load_dataset
 from datasets import Dataset as HuggingFaceDataset
@@ -26,30 +27,151 @@ _logger = logging.getLogger(__name__)
 # TODO: add suppor for RealSR
 # TODO: load pre-trained models from https://github.com/eugenesiow/super-image
 
+def _get_size(image: Union[Img, npt.ArrayLike, Tensor]) -> Tuple[int, int]:
+    if isinstance(image, Img):
+        w, h = image.size
+    elif isinstance(image, np.ndarray):
+        h, w = image.shape[:2]
+    elif isinstance(image, Tensor):
+        h, w = image.size()[-2:]
+    else:
+        raise ValueError(f'Unsupported type: {type(image)}')
+    return h, w
 
-class _CropIfOddSize:
-    """
-    Crops the given PIL Image if it has odd size.
-    """
 
-    def __init__(self, scale_factor: int = 4):
+class _SRDataset(Dataset):
+    def __init__(
+        self,
+        scale_factor: int,
+        patch_size: int = 0,
+        mode: str = 'train',
+        augment: bool = False
+    ):
+        assert patch_size % scale_factor == 0, \
+            f'patch_size ({patch_size}) should be divisible by scale_factor ({scale_factor})'
+        assert (mode == 'train' and patch_size != 0) or mode != 'train'
+
+        self._augment = augment
+        self._mode = mode
+        self._patch_size = patch_size
         self._scale_factor = scale_factor
 
-    def __call__(self, img: Image) -> Image:
-        if img.size[0] % self._scale_factor == 0 and \
-           img.size[1] % self._scale_factor == 0:
-            return img
+    def _get_item(
+            self,
+            lr_image: Union[Img, npt.ArrayLike, Tensor],
+            hr_image: Union[Img, npt.ArrayLike, Tensor, None],
+            image_path: str,
+            ) -> Dict[str, Union[str, Tensor]]:
 
-        size = (img.size[0] - (img.size[0] % self._scale_factor),
-                img.size[1] - (img.size[1] % self._scale_factor))
+        if self._mode == 'train':
+            if hr_image is None:
+                raise ValueError(f'No HR image for {image_path}')
 
-        return TF.center_crop(img, size)
+            if self._patch_size > 0:
+                lr_image, hr_image = self._get_patch(lr_image, hr_image, self._patch_size, self._scale_factor)
 
-    def __repr__(self):
-        return self.__class__.__name__ + '(size={0})'.format(self.size)
+            lr_h, lr_w = _get_size(lr_image)
+            hr_h, hr_w = _get_size(hr_image)
+
+            assert lr_h == hr_h // self._scale_factor and lr_w == hr_w // self._scale_factor, \
+                    f'Wrong sizes for {image_path}: LR {(lr_h, lr_w)}, HR {(hr_h, hr_w)}'
+
+            if self._augment:
+                angle = random.choice((0, 90, 180, 270))
+                if angle != 0:
+                    hr_image = TF.rotate(hr_image, angle=angle)
+                    lr_image = TF.rotate(lr_image, angle=angle)
+
+                apply = random.choice((True, False))
+                if apply:
+                    hr_image = TF.hflip(hr_image)
+                    lr_image = TF.hflip(lr_image)
+
+                apply = random.choice((True, False))
+                if apply:
+                    hr_image = TF.vflip(hr_image)
+                    lr_image = TF.vflip(lr_image)
+
+        elif self._mode == 'eval':
+            if hr_image is None:
+                raise ValueError(f'No HR image for {image_path}')
+
+            if self._patch_size > 0:
+                hr_image = TF.center_crop(hr_image, output_size=self._patch_size)
+                lr_image = TF.center_crop(lr_image, output_size=self._patch_size // self._scale_factor)
+
+            else:
+                lr_h, lr_w = _get_size(lr_image)
+                hr_h, hr_w = _get_size(hr_image)
+
+                if hr_h % self._scale_factor != 0 or hr_w % self._scale_factor != 0:
+                    size = (hr_h - (hr_h % self._scale_factor), hr_w - (hr_w % self._scale_factor))
+                    hr_image = TF.center_crop(hr_image, size)
+                    hr_h, hr_w = _get_size(hr_image) # type: ignore
+
+                if (lr_h > hr_h // self._scale_factor) or (lr_w > hr_w // self._scale_factor):
+                    size = (lr_h - (lr_h - (hr_h // self._scale_factor)), lr_w - (lr_w - (hr_w // self._scale_factor)))
+                    lr_image = TF.center_crop(lr_image, size)
+
+        else: # if self._mode == 'eval' or self._mode == 'test':
+            if self._patch_size > 0:
+                lr_image = TF.center_crop(lr_image, output_size=self._patch_size)
+
+        if __debug__ and hr_image is not None and (self._mode == 'train' or self._mode == 'eval'):
+            lr_h, lr_w = _get_size(lr_image)
+            hr_h, hr_w = _get_size(hr_image)
+            assert lr_h == hr_h // self._scale_factor and lr_w == hr_w // self._scale_factor, \
+                f'Wrong sizes for {image_path}: LR {(lr_h, lr_w)}, HR {(hr_h, hr_w)}'
+
+        # to_tensor handles both PIL Image or numpy array
+        if not isinstance(lr_image, Tensor):
+            lr_image = TF.to_tensor(lr_image)
+        if hr_image is not None and not isinstance(hr_image, Tensor):
+            hr_image = TF.to_tensor(hr_image)
+
+        return {
+            'lr': lr_image,
+            'hr': hr_image,
+            'path': image_path
+            }
 
 
-class _SRDatasetFromDirectory(Dataset):
+    def _get_patch(
+            self,
+            lr_image: Union[Img, npt.ArrayLike, Tensor],
+            hr_image: Union[Img, npt.ArrayLike, Tensor],
+            patch_size: int, scale: int,
+            ) -> Tuple[Union[Img, npt.ArrayLike, Tensor], Union[Img, npt.ArrayLike, Tensor]]:
+        """
+        gets a random patch with size (patch_size x patch_size) from the HR image
+        and the equivalent (patch_size/scale x patch_size/scale) from the LR image
+        """
+        assert patch_size % scale == 0, f'patch size ({patch_size}) must be divisible by scale ({scale})'
+
+        lr_patch_size = patch_size // scale
+        if isinstance(lr_image, Img):
+            lr_h, lr_w = lr_image.size
+        elif isinstance(lr_image, np.ndarray):
+            lr_h, lr_w = lr_image.shape[:2]
+        elif isinstance(lr_image, Tensor):
+            lr_h, lr_w = lr_image.size()[-2:]
+        else:
+            raise TypeError('lr_image should be either PIL Image or numpy array')
+
+        # get random ints to be used as start of the patch
+        lr_x = random.randrange(0, lr_h - lr_patch_size + 1)
+        lr_y = random.randrange(0, lr_w - lr_patch_size + 1)
+
+        hr_x = scale * lr_x
+        hr_y = scale * lr_y
+
+        lr_patch = TF.crop(lr_image, lr_x, lr_y, lr_patch_size, lr_patch_size)
+        hr_patch = TF.crop(hr_image, hr_x, hr_y, patch_size, patch_size)
+
+        return lr_patch, hr_patch
+
+
+class _SRImageDatasetFromDirectory(_SRDataset):
     def __init__(
         self,
         scale_factor: int,
@@ -59,17 +181,15 @@ class _SRDatasetFromDirectory(Dataset):
         lr_data_dir: Optional[Union[str, Path]] = None,
         hr_data_dir: Optional[Union[str, Path]] = None,
     ):
-        assert patch_size % scale_factor == 0, f'patch_size ({patch_size}) should be divisible by scale_factor ({scale_factor})'
-        assert (mode == 'train' and patch_size != 0) or mode != 'train'
+        super().__init__(scale_factor, patch_size, mode, augment)
+
         assert hr_data_dir is not None or mode == 'predict'
         assert lr_data_dir is not None or mode != 'predict'
+        assert lr_data_dir is not None or hr_data_dir is not None
 
         self._IMG_EXTENSIONS = {
             '.jpg', '.jpeg', '.png', '.ppm', '.bmp',
         }
-
-        self._patch_size = patch_size
-        self._scale_factor = scale_factor
 
         if hr_data_dir is not None:
             if isinstance(hr_data_dir, str):
@@ -89,123 +209,130 @@ class _SRDatasetFromDirectory(Dataset):
         else:
             self._lr_filenames = None
 
-        if mode == 'train':
-            if augment:
-                # https://pytorch.org/docs/stable/torchvision/transforms.html
-                if lr_data_dir is None:
-                    self._transforms = transforms.Compose([
-                        transforms.RandomCrop(patch_size),
-                        transforms.RandomApply([
-                            partial(TF.rotate, angle=0),
-                            partial(TF.rotate, angle=90),
-                            partial(TF.rotate, angle=180),
-                            partial(TF.rotate, angle=270),
-                        ]),
-                        transforms.RandomHorizontalFlip(),
-                        transforms.RandomVerticalFlip(),
-                    ])
-                else:
-                    self._transforms = transforms.Compose([
-                        transforms.RandomApply([
-                            partial(TF.rotate, angle=0),
-                            partial(TF.rotate, angle=90),
-                            partial(TF.rotate, angle=180),
-                            partial(TF.rotate, angle=270),
-                        ]),
-                        transforms.RandomHorizontalFlip(),
-                        transforms.RandomVerticalFlip(),
-                    ])
-            else:
-                if lr_data_dir is None:
-                    self._transforms = transforms.Compose([
-                        transforms.RandomCrop(patch_size)
-                    ])
-                else:
-                    self._transforms = None
-
-        elif mode == 'predict':
-            self._lr_filenames.sort()
-
-            if patch_size > 0:
-                self._transforms = transforms.Compose([
-                    transforms.CenterCrop(patch_size)
-                ])
-            else:
-                self._transforms = transforms.Compose([
-                    _CropIfOddSize(self._scale_factor)
-                ])
-
-        else:  # mode == 'eval' or mode == 'test':
-            self._hr_filenames.sort()
+        if mode != 'train':
+            if self._hr_filenames is not None:
+                self._hr_filenames.sort()
             if self._lr_filenames is not None:
                 self._lr_filenames.sort()
-
-            if patch_size > 0:
-                self._transforms = transforms.Compose([
-                    transforms.CenterCrop(patch_size)
-                ])
-            else:
-                self._transforms = transforms.Compose([
-                    _CropIfOddSize(self._scale_factor)
-                ])
 
     def __getitem__(self, index: int) -> Dict[str, Union[str, Tensor]]:
         if self._hr_filenames is not None:
             filename = self._hr_filenames[index]
-        else:
+        elif self._lr_filenames is not None:
             filename = self._lr_filenames[index]
+        else:
+            raise RuntimeError('No data available')
 
         img = Image.open(filename).convert('RGB')
-        if self._transforms is not None:
-            img_hr = self._transforms(img)
-        else:
+
+        if self._mode != 'predict':
+            if self._lr_filenames is None:
+                down_size = [l // self._scale_factor for l in _get_size(img)]
+                img_lr = TF.resize(img, down_size, interpolation=InterpolationMode.BICUBIC)
+            else:
+                img_lr = Image.open(self._lr_filenames[index]).convert('RGB')
+
             img_hr = img
 
-        if self._lr_filenames is None:
-            down_size = [l // self._scale_factor for l in img_hr.size[::-1]]
-            img_lr = TF.resize(img_hr, down_size, interpolation=Image.BICUBIC)
         else:
-            img_lr = Image.open(self._lr_filenames[index]).convert('RGB')
-            img_lr, img_hr = self._get_patch(img_lr, img_hr, self._patch_size, self._scale_factor)
+            img_lr = img
+            img_hr = None
 
-        assert img_lr.size[-2] == img_hr.size[-2] // self._scale_factor and \
-            img_lr.size[-1] == img_hr.size[-1] // self._scale_factor
-
-        return {'lr': TF.to_tensor(img_lr), 'hr': TF.to_tensor(img_hr), 'path': filename.stem}
+        return self._get_item(img_lr, img_hr, filename.stem)
 
     def __len__(self) -> int:
         if self._hr_filenames is not None:
             return len(self._hr_filenames)
-        else:
+        elif self._lr_filenames is not None:
             return len(self._lr_filenames)
+        else:
+            raise RuntimeError('No data available')
 
     def _is_image(self, path: Path) -> bool:
         return path.suffix.lower() in self._IMG_EXTENSIONS
 
-    def _get_patch(self, lr_image: Image, hr_image: Image, patch_size: int, scale: int) -> Tuple[Img]:
-        """
-        gets a random patch with size (patch_size x patch_size) from the HR image
-        and the equivalent (patch_size/scale x patch_size/scale) from the LR image
-        """
-        assert patch_size % scale == 0, f'patch size ({patch_size}) must be divisible by scale ({scale})'
 
-        lr_patch_size = patch_size // scale
-        lr_h, lr_w = lr_image.size
+class _SRDatasetFromDirectory(_SRDataset):
+    def __init__(
+        self,
+        scale_factor: int,
+        patch_size: int = 0,
+        mode: str = 'train',
+        augment: bool = False,
+        lr_data_dir: Optional[Union[str, Path]] = None,
+        hr_data_dir: Optional[Union[str, Path]] = None,
+        allowed_extensions: Set[str] = {'.npy'},
+    ):
+        super().__init__(scale_factor, patch_size, mode, augment)
 
-        # get random ints to be used as start of the patch
-        lr_x = random.randrange(0, lr_h - lr_patch_size + 1)
-        lr_y = random.randrange(0, lr_w - lr_patch_size + 1)
+        assert hr_data_dir is not None or mode == 'predict'
+        assert lr_data_dir is not None or mode != 'predict'
+        assert lr_data_dir is not None or hr_data_dir is not None
 
-        hr_x = scale * lr_x
-        hr_y = scale * lr_y
+        if hr_data_dir is not None:
+            if isinstance(hr_data_dir, str):
+                hr_data_dir = Path(hr_data_dir)
 
-        lr_patch = TF.crop(lr_image, lr_x, lr_y, lr_patch_size, lr_patch_size)
-        hr_patch = TF.crop(hr_image, hr_x, hr_y, patch_size, patch_size)
+            self._hr_filenames = [
+                f for f in hr_data_dir.glob('*') if self._is_valid_extension(f, allowed_extensions)]
+        else:
+            self._hr_filenames = None
 
-        return lr_patch, hr_patch
+        if lr_data_dir is not None:
+            if isinstance(lr_data_dir, str):
+                lr_data_dir = Path(lr_data_dir)
+
+            self._lr_filenames = [
+                f for f in lr_data_dir.glob('*') if self._is_valid_extension(f, allowed_extensions)]
+        else:
+            self._lr_filenames = None
+
+        if mode != 'train':
+            if self._hr_filenames is not None:
+                self._hr_filenames.sort()
+            if self._lr_filenames is not None:
+                self._lr_filenames.sort()
+
+    def __getitem__(self, index: int) -> Dict[str, Union[str, Tensor]]:
+        if self._hr_filenames is not None:
+            filename = self._hr_filenames[index]
+        elif self._lr_filenames is not None:
+            filename = self._lr_filenames[index]
+        else:
+            raise RuntimeError('No data available')
+
+        img = np.load(filename)
+        img = TF.to_tensor(img)
+
+        if self._mode != 'predict':
+            if self._lr_filenames is None:
+                down_size = [l // self._scale_factor for l in _get_size(img)]
+                img_lr = TF.resize(img, down_size, interpolation=InterpolationMode.BICUBIC)
+            else:
+                img_lr = np.load(self._lr_filenames[index])
+                img_lr = TF.to_tensor(img_lr)
+
+            img_hr = img
+
+        else:
+            img_lr = img
+            img_hr = None
+
+        return self._get_item(img_lr, img_hr, filename.stem)
+
+    def __len__(self) -> int:
+        if self._hr_filenames is not None:
+            return len(self._hr_filenames)
+        elif self._lr_filenames is not None:
+            return len(self._lr_filenames)
+        else:
+            raise RuntimeError('No data available')
+
+    def _is_valid_extension(self, path: Path, allowed_extensions: Set[str]) -> bool:
+        return path.suffix.lower() in allowed_extensions
 
 
-class _SRDataset(Dataset):
+class _SRHuggingFaceDataset(_SRDataset):
     def __init__(
         self,
         dataset: HuggingFaceDataset,
@@ -214,91 +341,19 @@ class _SRDataset(Dataset):
         mode: str = 'train',
         augment: bool = False
     ):
-        assert patch_size % scale_factor == 0
-        assert (mode == 'train' and patch_size != 0) or mode == 'eval'
+        super().__init__(scale_factor, patch_size, mode, augment)
 
-        self._augment = augment
         self._dataset = dataset
-        self._mode = mode
-        self._patch_size = patch_size
-        self._scale_factor = scale_factor
 
     def __getitem__(self, index: int) -> Dict[str, Union[str, Tensor]]:
         lr_image = Image.open(self._dataset[index]['lr']).convert('RGB')
         hr_image = Image.open(self._dataset[index]['hr']).convert('RGB')
         image_path = Path(self._dataset[index]['hr']).stem
 
-        if self._patch_size > 0:
-            lr_image, hr_image = self._get_patch(
-                lr_image, hr_image, self._patch_size, self._scale_factor)
-
-        assert lr_image.size[-2] == hr_image.size[-2] // self._scale_factor and \
-            lr_image.size[-1] == hr_image.size[-1] // self._scale_factor, \
-                f'Wrong sizes for {image_path}: LR {lr_image.size}, HR {hr_image.size}'
-
-        if self._mode == 'train':
-            if self._augment:
-                angle = random.choice((0, 90, 180, 270))
-                if angle != 0:
-                    hr_image = TF.rotate(hr_image, angle=angle)
-                    lr_image = TF.rotate(lr_image, angle=angle)
-
-                apply = random.choice((True, False))
-                if apply:
-                    hr_image = TF.hflip(hr_image)
-                    lr_image = TF.hflip(lr_image)
-
-                apply = random.choice((True, False))
-                if apply:
-                    hr_image = TF.vflip(hr_image)
-                    lr_image = TF.vflip(lr_image)
-
-        else:
-            if self._patch_size > 0:
-                hr_image = TF.center_crop(hr_image, output_size=self._patch_size)
-                lr_image = TF.center_crop(lr_image, output_size=self._patch_size // self._scale_factor)
-
-            else:
-                if hr_image.size[0] % self._scale_factor != 0 or hr_image.size[1] % self._scale_factor != 0:
-                    size = (hr_image.size[1] - (hr_image.size[1] % self._scale_factor),
-                            hr_image.size[0] - (hr_image.size[0] % self._scale_factor))
-                    hr_image = TF.center_crop(hr_image, size)
-
-                if (lr_image.size[0] > hr_image.size[0] // self._scale_factor) or (lr_image.size[1] > hr_image.size[1] // self._scale_factor):
-                    size = (lr_image.size[1] - (lr_image.size[1] - (hr_image.size[1] // self._scale_factor)),
-                            lr_image.size[0] - (lr_image.size[0] - (hr_image.size[0] // self._scale_factor)))
-                    lr_image = TF.center_crop(lr_image, size)
-
-        assert lr_image.size[-2] == hr_image.size[-2] // self._scale_factor and \
-            lr_image.size[-1] == hr_image.size[-1] // self._scale_factor, \
-            f'Wrong sizes for {image_path}: LR {lr_image.size}, HR {hr_image.size}'
-
-        return {'lr': TF.to_tensor(lr_image), 'hr': TF.to_tensor(hr_image), 'path': image_path}
+        return self._get_item(lr_image, hr_image, image_path)
 
     def __len__(self) -> int:
         return len(self._dataset)
-
-    def _get_patch(self, lr_image: Image, hr_image: Image, patch_size: int, scale: int) -> Tuple[Img]:
-        """
-        gets a random patch with size (patch_size x patch_size) from the HR image
-        and the equivalent (patch_size/scale x patch_size/scale) from the LR image
-        """
-        assert patch_size % scale == 0, f'patch size ({patch_size}) must be divisible by scale ({scale})'
-
-        lr_patch_size = patch_size // scale
-        lr_h, lr_w = lr_image.size
-
-        # get random ints to be used as start of the patch
-        lr_x = random.randrange(0, lr_h - lr_patch_size + 1)
-        lr_y = random.randrange(0, lr_w - lr_patch_size + 1)
-
-        hr_x = scale * lr_x
-        hr_y = scale * lr_y
-
-        lr_patch = TF.crop(lr_image, lr_x, lr_y, lr_patch_size, lr_patch_size)
-        hr_patch = TF.crop(hr_image, hr_x, hr_y, patch_size, patch_size)
-
-        return lr_patch, hr_patch
 
 
 class SRData(LightningDataModule):
@@ -391,24 +446,31 @@ class SRData(LightningDataModule):
             datasets = []
             for dataset in self._train_datasets_names:
                 if dataset.startswith('eugenesiow/'):
-                    datasets.append(_SRDataset(
+                    datasets.append(_SRHuggingFaceDataset(
                         load_dataset(dataset, f'bicubic_x{self._scale_factor}', split='train'),
                         scale_factor=self._scale_factor,
                         patch_size=self._patch_size,
                         augment=self._augment
                     ))
+
                 else:
+                    hr_dir = self._datasets_dir / dataset / 'HR'
+                    if len(list(hr_dir.glob('*.npy'))) > 0 or len(list(hr_dir.glob('*.npz'))) > 0:
+                        create_dataset = _SRDatasetFromDirectory
+                    else:
+                        create_dataset = _SRImageDatasetFromDirectory
+
                     if (self._datasets_dir / dataset / 'LR' / f'X{self._scale_factor}').exists():
-                        datasets.append(_SRDatasetFromDirectory(
-                            hr_data_dir=self._datasets_dir / dataset / 'HR',
+                        datasets.append(create_dataset(
+                            hr_data_dir=hr_dir,
                             lr_data_dir=self._datasets_dir / dataset / 'LR' / f'X{self._scale_factor}',
                             scale_factor=self._scale_factor,
                             patch_size=self._patch_size,
                             augment=self._augment
                         ))
                     else:
-                        datasets.append(_SRDatasetFromDirectory(
-                            hr_data_dir=self._datasets_dir / dataset / 'HR',
+                        datasets.append(create_dataset(
+                            hr_data_dir=hr_dir,
                             scale_factor=self._scale_factor,
                             patch_size=self._patch_size,
                             augment=self._augment
@@ -420,28 +482,32 @@ class SRData(LightningDataModule):
             datasets = []
             for dataset in self._eval_datasets_names:
                 if dataset.startswith('eugenesiow/'):
-                    datasets.append(_SRDataset(
+                    datasets.append(_SRHuggingFaceDataset(
                         load_dataset(dataset, f'bicubic_x{self._scale_factor}', split='validation'),
                         scale_factor=self._scale_factor,
                         mode='eval',
                         augment=self._augment
                     ))
                 else:
+                    hr_dir = self._datasets_dir / dataset / 'HR'
+                    if len(list(hr_dir.glob('*.npy'))) > 0 or len(list(hr_dir.glob('*.npz'))) > 0:
+                        create_dataset = _SRDatasetFromDirectory
+                    else:
+                        create_dataset = _SRImageDatasetFromDirectory
+
                     if (self._datasets_dir / dataset / 'LR' / f'X{self._scale_factor}').exists():
-                        datasets.append(_SRDatasetFromDirectory(
-                            hr_data_dir=self._datasets_dir / dataset / 'HR',
+                        datasets.append(create_dataset(
+                            hr_data_dir=hr_dir,
                             lr_data_dir=self._datasets_dir / dataset / 'LR' / f'X{self._scale_factor}',
                             scale_factor=self._scale_factor,
                             mode='eval',
-                            patch_size=self._patch_size,
                             augment=self._augment
                         ))
                     else:
-                        datasets.append(_SRDatasetFromDirectory(
-                            hr_data_dir=self._datasets_dir / dataset / 'HR',
+                        datasets.append(create_dataset(
+                            hr_data_dir=hr_dir,
                             scale_factor=self._scale_factor,
                             mode='eval',
-                            patch_size=self._patch_size,
                             augment=self._augment
                         ))
 
@@ -451,7 +517,7 @@ class SRData(LightningDataModule):
         if stage in ('predict',):
             datasets = []
             for dataset in self._predict_datasets_names:
-                datasets.append(_SRDatasetFromDirectory(
+                datasets.append(_SRImageDatasetFromDirectory(
                     lr_data_dir=self._datasets_dir / dataset,
                     scale_factor=self._scale_factor,
                     mode='predict',
@@ -467,14 +533,16 @@ class SRData(LightningDataModule):
 
     def val_dataloader(self):
         datasets = []
-        for dataset in self._eval_datasets:
-            datasets.append(DataLoader(dataset, batch_size=1, num_workers=multiprocessing.cpu_count()//2))
+        if self._eval_datasets is not None:
+            for dataset in self._eval_datasets:
+                datasets.append(DataLoader(dataset, batch_size=1, num_workers=multiprocessing.cpu_count()//2))
 
         return datasets
 
     def predict_dataloader(self):
         datasets = []
-        for dataset in self._predict_datasets:
-            datasets.append(DataLoader(dataset, batch_size=1, num_workers=multiprocessing.cpu_count()//2))
+        if self._predict_datasets is not None:
+            for dataset in self._predict_datasets:
+                datasets.append(DataLoader(dataset, batch_size=1, num_workers=multiprocessing.cpu_count()//2))
 
         return datasets
