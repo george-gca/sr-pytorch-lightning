@@ -1,11 +1,10 @@
 import itertools
 import logging
 from abc import ABC, abstractmethod
-from argparse import ArgumentParser
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable
 
 import kornia.augmentation as K
 import piq
@@ -74,61 +73,29 @@ class SRModel(pl.LightningModule, ABC):
     first gpu in model_gpus list, and the loss will be calculated in
     the last gpu.
     """
-    @staticmethod
-    def add_model_specific_args(parent: ArgumentParser) -> ArgumentParser:
-        parser = ArgumentParser(parents=[parent], add_help=False)
-        parser.add_argument('--channels',
-                            type=int, default=3)
-        parser.add_argument('--log_loss_every_n_epochs',
-                            type=int, default=1)
-        parser.add_argument('--log_weights_every_n_epochs',
-                            type=int, default=5)
-        # support for composite losses, like
-        # 0.5 * L1 + 0.5 * adaptive
-        parser.add_argument('--losses', type=str, default='1*L1')
-        parser.add_argument('--metrics', type=str, nargs='+',
-                            choices=[m for m in _supported_metrics],
-                            default=['PSNR', 'SSIM'])
-        parser.add_argument('--metrics_for_pbar', type=str, nargs='+',
-                            choices=[m for m in _supported_metrics],
-                            default=['PSNR'])
-        parser.add_argument('--model_gpus', type=int, nargs='*', default=[],
-                            help='which gpus to use when model parallel is selected')
-        parser.add_argument('--model_parallel', action='store_true',
-                            help='enable model parallelization')
-        parser.add_argument('--optimizer', default='ADAM',
-                            choices=[o for o in _supported_optimizers])
-        parser.add_argument('--optimizer_params', type=str, nargs='+',
-                            default=['lr=1e-4'])
-        parser.add_argument('--save_results', type=int, default=5,
-                            help='number of image results to save from each validation dataset. -1 will save all results')
-        parser.add_argument('--save_results_from_epoch', default='last',
-                            choices=('none', 'all', 'half', 'last', 'quarter'))
-        return parser
-
     def __init__(self,
                  batch_size: int=16,
                  channels: int=3,
                  default_root_dir: str='.',
-                 devices: Optional[Union[List[int], str, int]] = None,
-                 eval_datasets: List[str]=[],
+                 devices: None | list[int] | str | int = None,
+                 eval_datasets: list[str]=['DIV2K', 'Set5', 'Set14', 'B100', 'Urban100'],
                  log_loss_every_n_epochs: int=5,
                  log_weights_every_n_epochs: int=50,
                  losses: str='l1',
                  max_epochs: int=-1,
-                 metrics: List[str]=['PSNR', 'SSIM'],
-                 metrics_for_pbar: List[str]=['PSNR', 'SSIM'],
-                 model_gpus: List[str] = [],
+                 metrics: list[str]=['PSNR', 'SSIM'],
+                 metrics_for_pbar: list[str]=['PSNR', 'SSIM'],
+                 model_gpus: list[str] = [],
                  model_parallel: bool=False,
                  optimizer: str='ADAM',
-                 optimizer_params: List[str]=[],
+                 optimizer_params: list[str]=[],
                  patch_size: int=128,
                  precision: int=32,
-                 predict_datasets: List[str]=[],
+                 predict_datasets: list[str]=[],
                  save_results: int=-1,
                  save_results_from_epoch: str='last',
                  scale_factor: int=4,
-                 **kwargs: Dict[str, Any]):
+                 **kwargs: dict[str, Any]):
 
         super(SRModel, self).__init__()
         self._logger = logging.getLogger(__name__)
@@ -172,6 +139,8 @@ class SRModel(pl.LightningModule, ABC):
         self._save_results = save_results
         self._save_results_from_epoch = save_results_from_epoch
         self._scale_factor = scale_factor
+        self._training_step_outputs = []
+        self._validation_step_outputs = []
 
     def configure_optimizers(self):
         parameters_list = [self.parameters()]
@@ -198,12 +167,14 @@ class SRModel(pl.LightningModule, ABC):
                 f'cuda:{self._model_gpus[-1]}'))
 
         result = self._calculate_losses(img_sr=img_sr, img_hr=img_hr)
+        self._training_step_outputs.append(result)
         return result
 
-    def training_epoch_end(self, outputs):
+    def on_train_epoch_end(self):
         """
         Logs only the losses results for the last run batch
         """
+        # TODO pegar só da última
         def _log_loss(losses_dict):
             for key, val in losses_dict.items():
                 if is_tensor(val):
@@ -214,16 +185,16 @@ class SRModel(pl.LightningModule, ABC):
             self.log_dict(losses_dict, prog_bar=False, logger=True, add_dataloader_idx=False)
 
         if not self.trainer.sanity_checking:
-            if (self.current_epoch + 1) % self._log_loss_every_n_epochs == 0 and len(outputs) > 0:
-                last_result = outputs[-1]
+            if (self.current_epoch + 1) % self._log_loss_every_n_epochs == 0 and len(self._training_step_outputs) > 0:
+                last_result = self._training_step_outputs[-1]
                 # in case of using only one training dataset
-                # outputs is a list of dictionaries
+                # self._training_step_outputs is a list of dictionaries
                 # where each dict is the result of a batch run
                 if isinstance(last_result, dict):
                     _log_loss(last_result)
 
                 # in case of using multiple training datasets
-                # outputs is a list of lists of dictionaries
+                # self._training_step_outputs is a list of lists of dictionaries
                 # where each list of dicts is the results for one dataset
                 # and each dict is the result of a batch run for that dataset
                 else:  # if isinstance(dataset_result, list):
@@ -237,6 +208,8 @@ class SRModel(pl.LightningModule, ABC):
                         for name, param in self.named_parameters():
                             logger.experiment.log_histogram_3d(param.clone().cpu().data.numpy(), name=name,
                                                                step=self.current_epoch + 1)
+
+        self._training_step_outputs.clear()
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
         # validation step when using multiple validation datasets
@@ -351,11 +324,10 @@ class SRModel(pl.LightningModule, ABC):
                 elif isinstance(logger, CometLogger):
                     for img_to_save, suffix in zip(imgs_to_save, imgs_suffixes):
                         logger.experiment.log_image(
-                            img_to_save.view(
-                                *img_to_save.size()[1:]).cpu().detach(),
+                            img_to_save.view(*img_to_save.size()[1:]).cpu().detach(),
                             name=f'{image_path}{suffix}',
                             image_channels='first',
-                            step=self.global_step
+                            step=self.global_step,
                         )
 
             # log images metrics
@@ -367,9 +339,10 @@ class SRModel(pl.LightningModule, ABC):
 
             self.log_dict(image_metrics, prog_bar=False, logger=True, add_dataloader_idx=False)
 
+        self._validation_step_outputs.append(result)
         return result
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         if not self.trainer.sanity_checking:
             def _log_metrics(keys, metrics):
                 metrics_dict = {}
@@ -377,25 +350,27 @@ class SRModel(pl.LightningModule, ABC):
                     if len(metrics[0][k].size()) > 0:
                         # fix LPIPS output that comes as [[[[3.3]]]]
                         # with shape (1,1,1,1) instead of only a number
-                        metrics_dict[k] = torch.stack([m[k].squeeze() for m in metrics]).mean()
+                        metrics_dict[k] = torch.stack([m[k].squeeze() for m in metrics if k in m]).mean()
                     else:
-                        metrics_dict[k] = torch.stack([m[k] for m in metrics]).mean()
+                        metrics_dict[k] = torch.stack([m[k] for m in metrics if k in m]).mean()
                     metrics_dict[k] = metrics_dict[k].cpu().detach()
 
                 self.log_dict(metrics_dict, prog_bar=False, logger=True, add_dataloader_idx=False)
 
-            if isinstance(outputs[0], dict):
+            if isinstance(self._validation_step_outputs[0], dict):
                 # in case of using only one validation dataset
                 # outputs is a list of dictionaries
                 # where each dict is the result of a batch run
-                _log_metrics(outputs[0].keys(), outputs)
+                _log_metrics(self._validation_step_outputs[0].keys(), self._validation_step_outputs)
             else:  # if isinstance(outputs[0], list):
                 # in case of using multiple validation datasets
                 # outputs is a list of list of dictionaries
                 # where each list of lists if referent to a dataset and
                 # dict is the result of a batch run
-                for dataset_result in outputs:
+                for dataset_result in self._validation_step_outputs:
                     _log_metrics(dataset_result[0].keys(), dataset_result)
+
+        self._validation_step_outputs.clear()
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         # prediction step when using multiple prediction datasets
@@ -457,7 +432,7 @@ class SRModel(pl.LightningModule, ABC):
 
         return img_sr
 
-    def _create_losses(self, losses_str: str, patch_size: int, precision: int=32) -> List[_SubLoss]:
+    def _create_losses(self, losses_str: str, patch_size: int, precision: int=32) -> list[_SubLoss]:
         # support for composite losses, like
         # 0.5 * L1 + 0.5 * adaptive
         self._logger.debug('Preparing loss functions:')
@@ -525,7 +500,7 @@ class SRModel(pl.LightningModule, ABC):
 
         return losses
 
-    def _create_metrics(self, metrics: List[str]) -> List[Tuple[str, Callable]]:
+    def _create_metrics(self, metrics: list[str]) -> list[tuple[str, Callable]]:
         used_metrics = []
         for metric in metrics:
             if metric in _supported_metrics:
@@ -541,7 +516,7 @@ class SRModel(pl.LightningModule, ABC):
 
         return used_metrics
 
-    def _calculate_losses(self, img_sr: torch.Tensor, img_hr: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def _calculate_losses(self, img_sr: torch.Tensor, img_hr: torch.Tensor) -> dict[str, torch.Tensor]:
         losses = []
         losses_names = []
         for l in self._losses:
@@ -609,7 +584,7 @@ class SRModel(pl.LightningModule, ABC):
             metrics_dict[f'{self._eval_datasets[dataloader_idx]}/{name}'] = value
 
         # log so callbacks can use the metrics
-        prog_bar_metrics_dict = {k: v for k, v in metrics_dict.items() for m in self._metrics_for_pbar if m == k.split('/')[1]}
+        prog_bar_metrics_dict = {k: v for k, v in metrics_dict.items() for m in self._metrics_for_pbar if m in k}
         if len(prog_bar_metrics_dict) == 0:
             prog_bar_metrics_dict = metrics_dict.copy()
 
@@ -617,7 +592,7 @@ class SRModel(pl.LightningModule, ABC):
 
         return metrics_dict
 
-    def _parse_optimizer_config(self, optimizer: str, optimizer_params: List[str]) -> Tuple[optim.Optimizer, Dict[str, Union[float, str]]]:
+    def _parse_optimizer_config(self, optimizer: str, optimizer_params: list[str]) -> tuple[optim.Optimizer, dict[str, float | str]]:
         if optimizer in _supported_optimizers:
             optimizer_class = _supported_optimizers[optimizer]
         else:

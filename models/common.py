@@ -1,5 +1,4 @@
 from math import log2
-from typing import Tuple, Union
 
 import torch
 from torch import nn
@@ -12,8 +11,8 @@ class DefaultConv2d(nn.Conv2d):
 
     def __init__(
         self,
-        kernel_size: Union[int, Tuple[int, int]],
-        padding: Union[str, int, Tuple[int, int]] = 'same',
+        kernel_size: int | tuple[int, int],
+        padding: str | int | tuple[int, int] = 'same',
         **kwargs
     ):
         if isinstance(padding, str):
@@ -22,7 +21,10 @@ class DefaultConv2d(nn.Conv2d):
             if lower_padding == 'valid':
                 padding = 0
             else:  # if lower_padding == 'same':
-                padding = kernel_size//2
+                if isinstance(kernel_size, int):
+                    padding = kernel_size // 2
+                else:
+                    padding = tuple(k // 2 for k in kernel_size)
 
         super(DefaultConv2d, self).__init__(
             kernel_size=kernel_size, padding=padding, **kwargs)
@@ -57,8 +59,8 @@ class MeanShift(nn.Conv2d):
     def __init__(
         self,
         rgb_range: int = 1,
-        rgb_mean: Tuple[float, float, float] = (0.4488, 0.4371, 0.4040),
-        rgb_std: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        rgb_mean: tuple[float, float, float] = (0.4488, 0.4371, 0.4040),
+        rgb_std: tuple[float, float, float] = (1.0, 1.0, 1.0),
         sign: int = -1
     ):
         super(MeanShift, self).__init__(3, 3, kernel_size=1)

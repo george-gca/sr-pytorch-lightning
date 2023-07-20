@@ -1,5 +1,4 @@
-from argparse import ArgumentParser
-from typing import Any, Dict
+from typing import Any
 
 import torch.nn as nn
 
@@ -80,23 +79,7 @@ class RCAN(SRModel):
     """
     LightningModule for RCAN, https://openaccess.thecvf.com/content_ECCV_2018/papers/Yulun_Zhang_Image_Super-Resolution_Using_ECCV_2018_paper.pdf.
     """
-    @staticmethod
-    def add_model_specific_args(parent: ArgumentParser) -> ArgumentParser:
-        parent = SRModel.add_model_specific_args(parent)
-        parser = ArgumentParser(parents=[parent], add_help=False)
-        parser.add_argument('--n_feats', type=int, default=64,
-                            help='number of feature maps')
-        parser.add_argument('--n_resblocks', type=int, default=16,
-                            help='number of residual blocks')
-        parser.add_argument('--n_resgroups', type=int, default=10,
-                            help='number of residual groups')
-        parser.add_argument('--reduction', type=int, default=16,
-                            help='number of feature maps reduction')
-        parser.add_argument('--res_scale', type=float, default=1,
-                            help='residual scaling')
-        return parser
-
-    def __init__(self, n_feats: int=64, n_resblocks: int=16, n_resgroups: int=10, reduction: int=16, res_scale: int=1, **kwargs: Dict[str, Any]):
+    def __init__(self, n_feats: int=64, n_resblocks: int=16, n_resgroups: int=10, reduction: int=16, res_scale: int=1, **kwargs: dict[str, Any]):
         super(RCAN, self).__init__(**kwargs)
         kernel_size = 3
 

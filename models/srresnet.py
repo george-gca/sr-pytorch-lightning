@@ -1,5 +1,4 @@
-from argparse import ArgumentParser
-from typing import Any, Dict
+from typing import Any
 
 import torch.nn as nn
 
@@ -8,20 +7,7 @@ from .srmodel import SRModel
 
 
 class SRResNet(SRModel):
-    """
-    LightningModule for SRResNet, https://openaccess.thecvf.com/content_cvpr_2017/papers/Ledig_Photo-Realistic_Single_Image_CVPR_2017_paper.pdf.
-    """
-    @staticmethod
-    def add_model_specific_args(parent: ArgumentParser) -> ArgumentParser:
-        parent = SRModel.add_model_specific_args(parent)
-        parser = ArgumentParser(parents=[parent], add_help=False)
-        parser.add_argument('--n_resblocks', type=int, default=16,
-                            help='number of residual blocks')
-        parser.add_argument('--n_feats', type=int, default=64,
-                            help='number of feature maps')
-        return parser
-
-    def __init__(self, n_resblocks: int=16, n_feats: int=64, **kwargs: Dict[str, Any]):
+    def __init__(self, n_resblocks: int=16, n_feats: int=64, **kwargs: dict[str, Any]):
         super(SRResNet, self).__init__(**kwargs)
 
         self.head = BasicBlock(

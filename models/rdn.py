@@ -1,5 +1,4 @@
-from argparse import ArgumentParser
-from typing import Any, Dict
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -45,17 +44,7 @@ class RDN(SRModel):
     """
     LightningModule for RDN, https://openaccess.thecvf.com/content_cvpr_2018/papers/Zhang_Residual_Dense_Network_CVPR_2018_paper.pdf.
     """
-    @staticmethod
-    def add_model_specific_args(parent: ArgumentParser) -> ArgumentParser:
-        parent = SRModel.add_model_specific_args(parent)
-        parser = ArgumentParser(parents=[parent], add_help=False)
-        parser.add_argument('--G0', type=int, default=64)
-        parser.add_argument('--kernel_size', type=int, default=3)
-        parser.add_argument('--rdn_config', type=str, default='B',
-                            choices=['A', 'B'])
-        return parser
-
-    def __init__(self, rdn_config: str='B', G0: int=64, kernel_size: int=3, **kwargs: Dict[str, Any]):
+    def __init__(self, rdn_config: str='B', G0: int=64, kernel_size: int=3, **kwargs: dict[str, Any]):
         super(RDN, self).__init__(**kwargs)
 
         # number of RDB blocks, conv layers, out channels

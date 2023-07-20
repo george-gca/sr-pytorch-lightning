@@ -1,5 +1,4 @@
-from argparse import ArgumentParser
-from typing import Any, Dict
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -69,12 +68,7 @@ class DDBPN(SRModel):
     """
     LightningModule for DDBPN, https://openaccess.thecvf.com/content_cvpr_2018/papers/Haris_Deep_Back-Projection_Networks_CVPR_2018_paper.pdf.
     """
-    @staticmethod
-    def add_model_specific_args(parent: ArgumentParser) -> ArgumentParser:
-        parent = SRModel.add_model_specific_args(parent)
-        return parent
-
-    def __init__(self, **kwargs: Dict[str, Any]):
+    def __init__(self, **kwargs: dict[str, Any]):
         super(DDBPN, self).__init__(**kwargs)
 
         n0 = 128

@@ -1,6 +1,5 @@
-from argparse import ArgumentParser
 from math import ceil, sqrt
-from typing import Any, Dict
+from typing import Any
 
 import piq
 import torch
@@ -113,16 +112,7 @@ class SRGAN(SRModel):
     """
     LightningModule for SRGAN, https://arxiv.org/pdf/1609.04802.
     """
-    @staticmethod
-    def add_model_specific_args(parent: ArgumentParser) -> ArgumentParser:
-        parent = SRModel.add_model_specific_args(parent)
-        parser = ArgumentParser(parents=[parent], add_help=False)
-        parser.add_argument('--ngf', type=int, default=64)
-        parser.add_argument('--n_blocks', type=int, default=16)
-        parser.add_argument('--ndf', type=int, default=64)
-        return parser
-
-    def __init__(self, ngf: int=64, ndf: int=64, n_blocks: int=16, **kwargs: Dict[str, Any]):
+    def __init__(self, ngf: int=64, ndf: int=64, n_blocks: int=16, **kwargs: dict[str, Any]):
 
         super(SRGAN, self).__init__(**kwargs)
 

@@ -82,7 +82,7 @@ class ItemsProgressBar(TQDMProgressBar):
         return self.trainer.num_training_batches * self.batch_size
 
 
-def setup_log(args: argparse.Namespace, logs_to_silence: List[str] = []) -> logging.Logger:
+def setup_log(args: argparse.Namespace, logs_to_silence: list[str] = []) -> logging.Logger:
     def log_print(self, message, *args, **kws):
         if self.isEnabledFor(logging.PRINT):
             # yes, logger takes its '*args' as 'args'.

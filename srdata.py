@@ -1,9 +1,7 @@
 import logging
 import multiprocessing
 import random
-from argparse import ArgumentParser, Namespace
 from pathlib import Path
-from typing import Dict, Optional, Set, Tuple, Union
 
 import numpy.typing as npt
 import numpy as np
@@ -27,7 +25,7 @@ _logger = logging.getLogger(__name__)
 # TODO: add suppor for RealSR
 # TODO: load pre-trained models from https://github.com/eugenesiow/super-image
 
-def _get_size(image: Union[Img, npt.ArrayLike, Tensor]) -> Tuple[int, int]:
+def _get_size(image: Img | npt.ArrayLike | Tensor) -> tuple[int, int]:
     if isinstance(image, Img):
         w, h = image.size
     elif isinstance(image, np.ndarray):
@@ -58,10 +56,10 @@ class _SRDataset(Dataset):
 
     def _get_item(
             self,
-            lr_image: Union[Img, npt.ArrayLike, Tensor],
-            hr_image: Union[Img, npt.ArrayLike, Tensor, None],
+            lr_image: Img | npt.ArrayLike | Tensor,
+            hr_image: Img | npt.ArrayLike | Tensor | None,
             image_path: str,
-            ) -> Dict[str, Union[str, Tensor]]:
+            ) -> dict[str, str | Tensor]:
 
         if self._mode == 'train':
             if hr_image is None:
@@ -138,10 +136,10 @@ class _SRDataset(Dataset):
 
     def _get_patch(
             self,
-            lr_image: Union[Img, npt.ArrayLike, Tensor],
-            hr_image: Union[Img, npt.ArrayLike, Tensor],
+            lr_image: Img | npt.ArrayLike | Tensor,
+            hr_image: Img | npt.ArrayLike | Tensor,
             patch_size: int, scale: int,
-            ) -> Tuple[Union[Img, npt.ArrayLike, Tensor], Union[Img, npt.ArrayLike, Tensor]]:
+            ) -> tuple[Img | npt.ArrayLike | Tensor, Img | npt.ArrayLike | Tensor]:
         """
         gets a random patch with size (patch_size x patch_size) from the HR image
         and the equivalent (patch_size/scale x patch_size/scale) from the LR image
@@ -178,8 +176,8 @@ class _SRImageDatasetFromDirectory(_SRDataset):
         patch_size: int = 0,
         mode: str = 'train',
         augment: bool = False,
-        lr_data_dir: Optional[Union[str, Path]] = None,
-        hr_data_dir: Optional[Union[str, Path]] = None,
+        lr_data_dir: None | str | Path = None,
+        hr_data_dir: None | str | Path = None,
     ):
         super().__init__(scale_factor, patch_size, mode, augment)
 
@@ -215,7 +213,7 @@ class _SRImageDatasetFromDirectory(_SRDataset):
             if self._lr_filenames is not None:
                 self._lr_filenames.sort()
 
-    def __getitem__(self, index: int) -> Dict[str, Union[str, Tensor]]:
+    def __getitem__(self, index: int) -> dict[str, str | Tensor]:
         if self._hr_filenames is not None:
             filename = self._hr_filenames[index]
         elif self._lr_filenames is not None:
@@ -259,9 +257,9 @@ class _SRDatasetFromDirectory(_SRDataset):
         patch_size: int = 0,
         mode: str = 'train',
         augment: bool = False,
-        lr_data_dir: Optional[Union[str, Path]] = None,
-        hr_data_dir: Optional[Union[str, Path]] = None,
-        allowed_extensions: Set[str] = {'.npy'},
+        lr_data_dir: None | str | Path = None,
+        hr_data_dir: None | str | Path = None,
+        allowed_extensions: set[str] = {'.npy'},
     ):
         super().__init__(scale_factor, patch_size, mode, augment)
 
@@ -293,7 +291,7 @@ class _SRDatasetFromDirectory(_SRDataset):
             if self._lr_filenames is not None:
                 self._lr_filenames.sort()
 
-    def __getitem__(self, index: int) -> Dict[str, Union[str, Tensor]]:
+    def __getitem__(self, index: int) -> dict[str, str | Tensor]:
         if self._hr_filenames is not None:
             filename = self._hr_filenames[index]
         elif self._lr_filenames is not None:
@@ -328,7 +326,7 @@ class _SRDatasetFromDirectory(_SRDataset):
         else:
             raise RuntimeError('No data available')
 
-    def _is_valid_extension(self, path: Path, allowed_extensions: Set[str]) -> bool:
+    def _is_valid_extension(self, path: Path, allowed_extensions: set[str]) -> bool:
         return path.suffix.lower() in allowed_extensions
 
 
@@ -345,7 +343,7 @@ class _SRHuggingFaceDataset(_SRDataset):
 
         self._dataset = dataset
 
-    def __getitem__(self, index: int) -> Dict[str, Union[str, Tensor]]:
+    def __getitem__(self, index: int) -> dict[str, str | Tensor]:
         lr_image = Image.open(self._dataset[index]['lr']).convert('RGB')
         hr_image = Image.open(self._dataset[index]['hr']).convert('RGB')
         image_path = Path(self._dataset[index]['hr']).stem
@@ -363,44 +361,30 @@ class SRData(LightningDataModule):
     or https://github.com/jbhuang0604/SelfExSR
     or better https://github.com/eugenesiow/super-image-data
     """
-    @staticmethod
-    def add_dataset_specific_args(parent: ArgumentParser) -> ArgumentParser:
-        parser = ArgumentParser(parents=[parent], add_help=False)
-        parser.add_argument('-d', '--datasets_dir',
-                            type=str, default='datasets')
-        parser.add_argument('--no_augment', action='store_true')
-        parser.add_argument('--eval_datasets', type=str, nargs='+',
-                            default=['DIV2K', 'Set5',
-                                     'Set14', 'B100', 'Urban100'])
-        parser.add_argument('--train_datasets', type=str, nargs='+',
-                            default=['DIV2K'])
-        parser.add_argument('--predict_datasets', type=str, nargs='*',
-                            default=[])
-        return parser
-
-    def __init__(self, args: Namespace):
+    def __init__(self,
+                 augment: bool = True,
+                 batch_size: int = 1,
+                 datasets_dir: str = 'datasets',
+                 eval_datasets: list[str] = ['DIV2K', 'Set5', 'Set14', 'B100', 'Urban100'],
+                 patch_size: int = 128,
+                 predict_datasets: list[str] = [],
+                 scale_factor: int = 4,
+                 train_datasets: list[str] = ['DIV2K'],
+                 ):
         super(SRData, self).__init__()
-        self._augment = not args.no_augment
-        self._datasets_dir = Path(args.datasets_dir)
+        self._augment = augment
+        self._batch_size = batch_size
+        self._datasets_dir = Path(datasets_dir)
         self._eval_datasets = None
-        self._eval_datasets_names = args.eval_datasets.copy()
+        self._eval_datasets_names = eval_datasets.copy()
+        self._patch_size = patch_size
         self._predict_datasets = None
-        self._predict_datasets_names = args.predict_datasets.copy()
-        self._scale_factor = args.scale_factor
+        self._predict_datasets_names = predict_datasets.copy()
+        self._scale_factor = scale_factor
         self._train_datasets = None
-        self._train_datasets_names = args.train_datasets.copy()
+        self._train_datasets_names = train_datasets.copy()
 
-        if 'batch_size' in args:
-            self._batch_size = args.batch_size
-        else:
-            self._batch_size = 1
-
-        if 'patch_size' in args:
-            self._patch_size = args.patch_size
-        else:
-            self._patch_size = 128
-
-    def prepare_data(self):
+    def prepare_data(self) -> None:
         # download, split, etc...
         # only called on 1 GPU/TPU in distributed
         for i in range(len(self._train_datasets_names)):
@@ -438,7 +422,7 @@ class SRData(LightningDataModule):
                                         f' in {self._datasets_dir / dataset}.')
 
 
-    def setup(self, stage: Optional[str] = None):
+    def setup(self, stage: None | str = None) -> None:
         # make assignments here (val/train/test split) for use in Dataloaders
         # called on every process in DDP
         _logger.info(f'Setup {stage}')
@@ -527,11 +511,11 @@ class SRData(LightningDataModule):
 
             self._predict_datasets = datasets
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader:
         return DataLoader(self._train_datasets, self._batch_size, shuffle=True,
                           num_workers=multiprocessing.cpu_count()//2)
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
         datasets = []
         if self._eval_datasets is not None:
             for dataset in self._eval_datasets:
@@ -539,7 +523,7 @@ class SRData(LightningDataModule):
 
         return datasets
 
-    def predict_dataloader(self):
+    def predict_dataloader(self) -> DataLoader:
         datasets = []
         if self._predict_datasets is not None:
             for dataset in self._predict_datasets:

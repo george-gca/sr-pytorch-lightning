@@ -1,5 +1,4 @@
-from argparse import ArgumentParser
-from typing import Any, Dict
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -56,21 +55,7 @@ class WDSR(SRModel):
     """
     LightningModule for WDSR, https://bmvc2019.org/wp-content/uploads/papers/0288-paper.pdf.
     """
-    @staticmethod
-    def add_model_specific_args(parent: ArgumentParser) -> ArgumentParser:
-        parent = SRModel.add_model_specific_args(parent)
-        parser = ArgumentParser(parents=[parent], add_help=False)
-        parser.add_argument('--n_feats', type=int, default=128,
-                            help='number of features to use in conv')
-        parser.add_argument('--n_resblocks', type=int, default=16,
-                            help='number of residual blocks')
-        parser.add_argument('--res_scale', type=float, default=1,
-                            help='residual scaling')
-        parser.add_argument('--type', type=str, default='B',
-                            choices=['A', 'B'])
-        return parser
-
-    def __init__(self, type: str='B', n_feats: int=128, n_resblocks: int=16, res_scale: int=1, **kwargs: Dict[str, Any]):
+    def __init__(self, type: str='B', n_feats: int=128, n_resblocks: int=16, res_scale: int=1, **kwargs: dict[str, Any]):
         super(WDSR, self).__init__(**kwargs)
         kernel_size = 3
 

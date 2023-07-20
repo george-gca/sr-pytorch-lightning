@@ -1,6 +1,7 @@
 # Created by: George Corrêa de Araújo (george.gcac@gmail.com)
 
-FROM pytorch/pytorch:1.11.0-cuda11.3-cudnn8-devel
+# FROM pytorch/pytorch:1.11.0-cuda11.3-cudnn8-devel
+FROM pytorch/pytorch:2.0.1-cuda11.7-cudnn8-devel
 
 # used to make generated files belong to actual user
 ARG GROUPID=901
@@ -59,11 +60,13 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         kornia \
         matplotlib \
         numpy \
+        omegaconf \
         pillow \
         piq \
         prettytable \
         pytorch-lightning \
         "pytorch-lightning[extra]" \
+        rich \
         tensorboard \
         torch_optimizer \
         tqdm && \

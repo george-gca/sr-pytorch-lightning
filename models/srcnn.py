@@ -1,5 +1,4 @@
-from argparse import ArgumentParser
-from typing import Any, Dict
+from typing import Any
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,12 +11,7 @@ class SRCNN(SRModel):
     LightningModule for SRCNN, https://ieeexplore.ieee.org/document/7115171?arnumber=7115171
     https://arxiv.org/pdf/1501.00092.pdf.
     """
-    @staticmethod
-    def add_model_specific_args(parent: ArgumentParser) -> ArgumentParser:
-        parent = SRModel.add_model_specific_args(parent)
-        return parent
-
-    def __init__(self, **kwargs: Dict[str, Any]):
+    def __init__(self, **kwargs: dict[str, Any]):
         super(SRCNN, self).__init__(**kwargs)
         self._net = nn.Sequential(
             nn.Conv2d(self._channels, 64, 9, padding=4),
