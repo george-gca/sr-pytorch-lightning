@@ -1,0 +1,128 @@
+# this file should only be used to see possible configuration params and how to set them
+# it should NOT be called directly by the training script
+file_log_level: info
+log_level: warning
+seed_everything: true
+seed: 42
+
+data:
+  augment: true
+  batch_size: 16
+  datasets_dir: /datasets
+  eval_datasets:
+  - B100
+  - DIV2K
+  - Set14
+  - Set5
+  - Urban100
+  patch_size: 128
+  predict_datasets: []
+  scale_factor: 4
+  train_datasets:
+  - DIV2K
+
+model:
+  class_path: SRCNN
+  init_args:
+    # batch_size: 16 # linked to data.batch_size
+    channels: 3
+    default_root_dir: .
+    # devices: null
+    # eval_datasets: # linked to data.eval_datasets
+    # - B100
+    # - DIV2K
+    # - Set14
+    # - Set5
+    # - Urban100
+    log_loss_every_n_epochs: 50
+    log_weights_every_n_epochs: ${trainer.check_val_every_n_epoch}
+    losses: l1
+    # max_epochs: 20 # linked to trainer.max_epochs
+    metrics:
+    - BRISQUE
+    - FLIP
+    - LPIPS
+    - MS-SSIM
+    - PSNR
+    - SSIM
+    metrics_for_pbar: # can be only metric name (PSNR) or dataset/metric name (DIV2K/PSNR)
+    - DIV2K/PSNR
+    - DIV2K/SSIM
+    model_gpus: []
+    model_parallel: false
+    optimizer: ADAM
+    optimizer_params: []
+    # patch_size: 128 # linked to data.patch_size
+    precision: 32
+    predict_datasets: []
+    save_results: -1
+    save_results_from_epoch: last
+    # scale_factor: 4 # linked to data.scale_factor
+
+trainer:
+  # https://lightning.ai/docs/pytorch/stable/common/trainer.html
+  accelerator: auto
+  accumulate_grad_batches: 1
+  barebones: false
+  benchmark: null
+  callbacks:
+  - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    init_args:
+      dirpath: ${trainer.default_root_dir}/checkpoints
+      every_n_epochs: ${trainer.check_val_every_n_epoch}
+      filename: ${model.class_path}_X${data.scale_factor}_e_${trainer.max_epochs}_p_${data.patch_size}
+      mode: max # could be different for different monitored metrics
+      monitor: DIV2K/PSNR
+      save_last: true
+      save_top_k: 3
+      verbose: false
+  check_val_every_n_epoch: 200
+  default_root_dir: experiments/${model.class_path}_X${data.scale_factor}_e_${trainer.max_epochs}_p_${data.patch_size}
+  detect_anomaly: false
+  deterministic: null
+  devices: [0]
+  enable_checkpointing: null
+  enable_model_summary: null
+  enable_progress_bar: null
+  fast_dev_run: false
+  gradient_clip_algorithm: null
+  gradient_clip_val: null
+  inference_mode: true
+  logger:
+  - class_path: pytorch_lightning.loggers.CometLogger
+    # for this to work, create the file ~/.comet.config with
+    # [comet]
+    # api_key = YOUR API KEY
+    # for more info, see https://www.comet.com/docs/v2/api-and-sdk/python-sdk/advanced/configuration/#configuration-parameters
+    init_args:
+      experiment_name: ${model.class_path}_X${data.scale_factor}_e_${trainer.max_epochs}_p_${data.patch_size}
+      offline: false
+      project_name: sr-pytorch-lightning
+      save_dir: ${trainer.default_root_dir}
+  - class_path: pytorch_lightning.loggers.TensorBoardLogger
+    init_args:
+      default_hp_metric: false
+      log_graph: true
+      name: tensorboard_logs
+      save_dir: ${trainer.default_root_dir}
+  limit_predict_batches: null
+  limit_test_batches: null
+  limit_train_batches: null
+  limit_val_batches: null
+  log_every_n_steps: null
+  max_epochs: 2000
+  max_steps: -1
+  max_time: null
+  min_epochs: null
+  min_steps: null
+  num_nodes: 1
+  num_sanity_val_steps: null
+  overfit_batches: 0.0
+  plugins: null
+  precision: 32-true
+  profiler: null
+  reload_dataloaders_every_n_epochs: 0
+  strategy: auto
+  sync_batchnorm: false
+  use_distributed_sampler: true
+  val_check_interval: null

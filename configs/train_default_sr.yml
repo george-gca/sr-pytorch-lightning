@@ -1,0 +1,66 @@
+data:
+  augment: true
+  batch_size: 16
+  datasets_dir: /datasets
+  eval_datasets:
+  - B100
+  - DIV2K
+  - Set14
+  - Set5
+  - Urban100
+  patch_size: 128
+  scale_factor: 4
+  train_datasets:
+  - DIV2K
+
+model:
+  init_args:
+    channels: 3
+    log_loss_every_n_epochs: 50
+    losses: l1
+    metrics:
+    - BRISQUE
+    - FLIP
+    - LPIPS
+    - MS-SSIM
+    - PSNR
+    - SSIM
+    metrics_for_pbar: # can be only metric name (PSNR) or dataset/metric name (DIV2K/PSNR)
+    - DIV2K/PSNR
+    - DIV2K/SSIM
+    optimizer: ADAM
+    save_results: -1
+    save_results_from_epoch: last
+
+trainer:
+  # https://lightning.ai/docs/pytorch/stable/common/trainer.html
+  callbacks:
+  - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    init_args:
+      every_n_epochs: ${trainer.check_val_every_n_epoch}
+      filename: model
+      mode: max # could be different for different monitored metrics
+      monitor: DIV2K/PSNR
+      save_last: true
+      save_top_k: 3
+      verbose: false
+  # - class_path: pytorch_lightning.callbacks.RichModelSummary
+  #   init_args:
+  #     max_depth: -1
+  # - class_path: pytorch_lightning.callbacks.RichProgressBar
+  check_val_every_n_epoch: 200
+  default_root_dir: experiments/test
+  logger:
+  - class_path: pytorch_lightning.loggers.CometLogger
+    init_args:
+      experiment_name: test
+      offline: false
+      project_name: sr-pytorch-lightning
+      save_dir: ${trainer.default_root_dir} # without save_dir defined here, Trainer throws an assertion error
+  # - class_path: pytorch_lightning.loggers.TensorBoardLogger
+  #   init_args:
+  #     default_hp_metric: false
+  #     log_graph: true
+  #     name: tensorboard_logs
+  #     save_dir: ${trainer.default_root_dir}
+  max_epochs: 2000
