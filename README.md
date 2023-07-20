@@ -110,7 +110,7 @@ api_key=YOUR_API_KEY
 
 More configuration variables can be found [here](https://www.comet.ml/docs/python-sdk/advanced/#comet-configuration-variables).
 
-Most of the things that I found useful to log (metrics, codes, log, image results) are already being logged. Check [train.py](train.py) and [srmodel.py](models/srmodel.py) for more details. All these loggings are done by the [comet logger](https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.loggers.comet.html) already available from pytorch lightning. An example of these experiments logged in Comet can be found [here](https://www.comet.ml/george-gca/super-resolution-experiments).
+Most of the things that I found useful to log (metrics, codes, log, image results) are already being logged. Check [train.py](train.py) and [srmodel.py](models/srmodel.py) for more details. All these loggings are done by the [comet logger](https://pytorch-lightning.readthedocs.io/en/stable/api/lightning.pytorch.loggers.comet.html) already available from pytorch lightning. An example of these experiments logged in Comet can be found [here](https://www.comet.ml/george-gca/super-resolution-experiments).
 
 ## Finished experiment Telegram notification
 

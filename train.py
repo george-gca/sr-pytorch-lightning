@@ -6,10 +6,10 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.callbacks import TQDMProgressBar
-from pytorch_lightning.loggers import CometLogger, TensorBoardLogger
+from lightning.pytorch import Trainer, seed_everything
+from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import TQDMProgressBar
+from lightning.pytorch.loggers import CometLogger, TensorBoardLogger
 
 import models
 from srdata import SRData
@@ -23,14 +23,14 @@ class ItemsProgressBar(TQDMProgressBar):
     - **sanity check progress:** the progress during the sanity check run
     - **main progress:** shows training + validation progress combined. It also accounts for
       multiple validation runs during training when
-      :paramref:`~pytorch_lightning.trainer.trainer.Trainer.val_check_interval` is used.
+      :paramref:`~lightning.pytorch.trainer.trainer.Trainer.val_check_interval` is used.
     - **validation progress:** only visible during validation;
       shows total progress over all validation datasets.
     - **test progress:** only active when testing; shows total progress over all test datasets.
     For infinite datasets, the progress bar never ends.
     If you want to customize the default ``tqdm`` progress bars used by Lightning, you can override
     specific methods of the callback class and pass your custom implementation to the
-    :class:`~pytorch_lightning.trainer.trainer.Trainer`:
+    :class:`~lightning.pytorch.trainer.trainer.Trainer`:
     Example::
         class LitProgressBar(ProgressBar):
             def init_validation_tqdm(self):
@@ -43,16 +43,16 @@ class ItemsProgressBar(TQDMProgressBar):
         refresh_rate:
             Determines at which rate (in number of batches) the progress bars get updated.
             Set it to ``0`` to disable the display. By default, the
-            :class:`~pytorch_lightning.trainer.trainer.Trainer` uses this implementation of the progress
+            :class:`~lightning.pytorch.trainer.trainer.Trainer` uses this implementation of the progress
             bar and sets the refresh rate to the value provided to the
-            :paramref:`~pytorch_lightning.trainer.trainer.Trainer.progress_bar_refresh_rate` argument in the
-            :class:`~pytorch_lightning.trainer.trainer.Trainer`.
+            :paramref:`~lightning.pytorch.trainer.trainer.Trainer.progress_bar_refresh_rate` argument in the
+            :class:`~lightning.pytorch.trainer.trainer.Trainer`.
         process_position:
             Set this to a value greater than ``0`` to offset the progress bars by this many lines.
             This is useful when you have progress bars defined elsewhere and want to show all of them
             together. This corresponds to
-            :paramref:`~pytorch_lightning.trainer.trainer.Trainer.process_position` in the
-            :class:`~pytorch_lightning.trainer.trainer.Trainer`.
+            :paramref:`~lightning.pytorch.trainer.trainer.Trainer.process_position` in the
+            :class:`~lightning.pytorch.trainer.trainer.Trainer`.
     """
 
     def __init__(self, refresh_rate: int = 1, process_position: int = 0, batch_size: int = 16):

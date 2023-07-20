@@ -7,7 +7,7 @@ import numpy.typing as npt
 import numpy as np
 from PIL import Image
 from PIL.Image import Image as Img
-from pytorch_lightning import LightningDataModule
+from lightning.pytorch import LightningDataModule
 from torch import Tensor
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from torchvision.transforms import functional as TF

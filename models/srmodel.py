@@ -8,14 +8,14 @@ from typing import Any, Callable
 
 import kornia.augmentation as K
 import piq
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torch_optimizer as toptim
 from losses import EdgeLoss, FLIP, FLIPLoss, PencilSketchLoss
-from pytorch_lightning.loggers import CometLogger, TensorBoardLogger
+from lightning.pytorch.loggers import CometLogger, TensorBoardLogger
 from robust_loss_pytorch import AdaptiveImageLossFunction
 from torch import is_tensor
 

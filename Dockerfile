@@ -58,14 +58,14 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         ipdb \
         ipython \
         kornia \
+        lightning \
+        "lightning[extra]" \
         matplotlib \
         numpy \
         omegaconf \
         pillow \
         piq \
         prettytable \
-        pytorch-lightning \
-        "pytorch-lightning[extra]" \
         rich \
         tensorboard \
         torch_optimizer \

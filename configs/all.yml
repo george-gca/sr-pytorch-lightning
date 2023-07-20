@@ -66,7 +66,7 @@ trainer:
   barebones: false
   benchmark: null
   callbacks:
-  - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: ${trainer.default_root_dir}/checkpoints
       every_n_epochs: ${trainer.check_val_every_n_epoch}
@@ -89,7 +89,7 @@ trainer:
   gradient_clip_val: null
   inference_mode: true
   logger:
-  - class_path: pytorch_lightning.loggers.CometLogger
+  - class_path: lightning.pytorch.loggers.CometLogger
     # for this to work, create the file ~/.comet.config with
     # [comet]
     # api_key = YOUR API KEY
@@ -99,7 +99,7 @@ trainer:
       offline: false
       project_name: sr-pytorch-lightning
       save_dir: ${trainer.default_root_dir}
-  - class_path: pytorch_lightning.loggers.TensorBoardLogger
+  - class_path: lightning.pytorch.loggers.TensorBoardLogger
     init_args:
       default_hp_metric: false
       log_graph: true

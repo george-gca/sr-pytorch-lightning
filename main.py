@@ -2,8 +2,8 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import numpy as np
-from pytorch_lightning.cli import LightningCLI
-from pytorch_lightning.loggers import CometLogger
+from lightning.pytorch.cli import LightningCLI
+from lightning.pytorch.loggers import CometLogger
 
 import models
 from srdata import SRData

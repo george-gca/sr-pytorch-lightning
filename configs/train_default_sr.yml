@@ -35,7 +35,7 @@ model:
 trainer:
   # https://lightning.ai/docs/pytorch/stable/common/trainer.html
   callbacks:
-  - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       every_n_epochs: ${trainer.check_val_every_n_epoch}
       filename: model
@@ -44,20 +44,20 @@ trainer:
       save_last: true
       save_top_k: 3
       verbose: false
-  # - class_path: pytorch_lightning.callbacks.RichModelSummary
+  # - class_path: lightning.pytorch.callbacks.RichModelSummary
   #   init_args:
   #     max_depth: -1
-  # - class_path: pytorch_lightning.callbacks.RichProgressBar
+  # - class_path: lightning.pytorch.callbacks.RichProgressBar
   check_val_every_n_epoch: 200
   default_root_dir: experiments/test
   logger:
-  - class_path: pytorch_lightning.loggers.CometLogger
+  - class_path: lightning.pytorch.loggers.CometLogger
     init_args:
       experiment_name: test
       offline: false
       project_name: sr-pytorch-lightning
       save_dir: ${trainer.default_root_dir} # without save_dir defined here, Trainer throws an assertion error
-  # - class_path: pytorch_lightning.loggers.TensorBoardLogger
+  # - class_path: lightning.pytorch.loggers.TensorBoardLogger
   #   init_args:
   #     default_hp_metric: false
   #     log_graph: true

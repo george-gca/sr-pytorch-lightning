@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.loggers import CometLogger, TensorBoardLogger
+from lightning.pytorch import Trainer, seed_everything
+from lightning.pytorch.loggers import CometLogger, TensorBoardLogger
 
 import models
 from srdata import SRData
