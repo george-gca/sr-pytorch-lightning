@@ -1,9 +1,10 @@
 <p>
+  <a href="https://www.gnu.org/software/bash/manual/bash.html"><img alt="Shell Script" src="https://img.shields.io/badge/-Shell Script-2C3840?style=flat-square&logo=gnu-bash&logoColor=white" /></a>
   <a href="https://www.python.org/"><img alt="Python 3" src="https://img.shields.io/badge/-Python-2b5b84?style=flat-square&logo=python&logoColor=white" /></a>
   <a href="https://pytorch.org/"><img alt="PyTorch" src="https://img.shields.io/badge/-PyTorch-ee4c2c?style=flat-square&logo=pytorch&logoColor=white" /></a>
-  <a href="https://www.pytorchlightning.ai/"><img alt="PyTorch Lightning" src="https://img.shields.io/badge/-PyTorch%20Lightning-792de4?style=flat-square&logo=pytorch-lightning&logoColor=white" /></a>
+  <a href="https://lightning.ai/"><img alt="Lightning" src="https://img.shields.io/badge/-Lightning-792de4?style=flat-square&logo=lightning&logoColor=white" /></a>
   <a href="https://www.docker.com/"><img alt="Docker" src="https://img.shields.io/badge/-Docker-0073ec?style=flat-square&logo=docker&logoColor=white" /></a>
-  <a href="https://www.comet.com/"><img alt="Comet ML" src="https://custom-icon-badges.herokuapp.com/badge/Comet%20ML-262c3e?style=flat-square&logo=logo_comet_ml&logoColor=white" /></a>
+  <a href="https://www.comet.com/"><img alt="Comet" src="https://custom-icon-badges.herokuapp.com/badge/Comet-262c3e?style=flat-square&logo=logo_comet_ml&logoColor=white" /></a>
 </p>
 
 # sr-pytorch-lightning
@@ -43,7 +44,7 @@ In [start_here.sh](start_here.sh) a few variables might be set in the `variables
 make
 ```
 
-If you want to build the docker image using the specific versions that I used during my last experiments, simply run
+If you want to use the specific versions I used during my last experiments, check the [pytorch_1.11](https://github.com/george-gca/sr-pytorch-lightning/tree/pytorch_1.11) branch. To build the docker image using the specific versions that I used, simply run:
 
 ```bash
 make DOCKERFILE=Dockerfile_fixed_versions
