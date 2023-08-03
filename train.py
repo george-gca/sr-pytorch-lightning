@@ -248,7 +248,7 @@ def main(Model: models.SRModel, args: argparse.Namespace):
         # catch the RuntimeError: CUDA error: out of memory and finishes execution
         torch.cuda.empty_cache()
         logger.exception('Runtime Error')
-    except:
+    except Exception:
         # catch other errors and finish execution so the log is uploaded to comet ml
         torch.cuda.empty_cache()
         logger.exception('Fatal error')
