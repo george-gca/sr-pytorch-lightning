@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from kornia.color import rgb_to_grayscale
-from losses.losses import PSNR, GANLoss, TVLoss, VGGLoss
+from losses.losses import GANLoss, TVLoss, VGGLoss
 from torch.optim.lr_scheduler import StepLR
 from torchvision.utils import make_grid
 

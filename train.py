@@ -1,7 +1,6 @@
 import argparse
 import inspect
 import logging
-from typing import List
 from pathlib import Path
 
 import numpy as np
